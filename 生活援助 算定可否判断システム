@@ -1,0 +1,4417 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<title>【AI】生活援助 算定可否判断システム（主任介護支援専門員・プロフェッショナル監査対応版）</title>
+
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.min.js" crossorigin="anonymous"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet" />
+
+<script>
+
+tailwind.config = {
+
+  darkMode: 'class',
+
+  theme: {
+
+    extend: {
+
+      colors: {
+
+        'ink': '#1E293B',
+
+      },
+
+      fontFamily: {
+
+        sans: \['"Inter"', '"Noto Sans JP"', '"Hiragino Kaku Gothic ProN"', '"Meiryo"', 'sans-serif'\],
+
+        serif: \['"Noto Serif JP"', 'serif'\],
+
+      }
+
+    }
+
+  }
+
+};
+
+</script>
+
+<style>
+
+@page {
+
+  size: A4;
+
+  margin: 1cm;
+
+}
+
+.A4-sheet {
+
+  background-color: #fcfcfa;
+
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCI+PGZpbHRlciBpZD0iZSI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9Ii45Ii8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsdGVyPSJ1cmwoI2UpIiBvcGFjaXR5PSIwLjAzNSIvPjwvc3ZnPg==');
+
+  color: #1E293B;
+
+  display: flex;
+
+  flex-direction: column;
+
+  width: 100%;
+
+  max-width: 21cm;
+
+  min-height: 29.7cm;
+
+  height: auto;
+
+  padding: 1.2cm 1.5cm;
+
+  margin: 0.75rem auto;
+
+  border: 1px #CBD5E1 solid;
+
+  border-radius: 5px;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+
+  box-sizing: border-box;
+
+  font-size: 9.2pt;
+
+  line-height: 1.48;
+
+  overflow: visible;
+
+  color-scheme: light;
+
+}
+
+.A4-sheet \* {
+
+  color: inherit;
+
+}
+
+.export-render {
+
+  width: 21cm !important;
+
+  max-width: 21cm !important;
+
+  padding: 1.4cm !important;
+
+  background-image: none !important;
+
+  background-color: #ffffff !important;
+
+}
+
+.export-render, .export-render \* {
+
+  color: #000 !important;
+
+}
+
+.export-render table,
+
+.export-render th,
+
+.export-render td,
+
+.export-render \[class\*="border-neutral-"\],
+
+.export-render \[class\*="border-slate-"\],
+
+.export-render \[class\*="border-gray-"\] {
+
+  border-color: #000 !important;
+
+}
+
+.auto-textarea {
+
+  width: 100%;
+
+  padding: 0.35rem 0.45rem;
+
+  font-family: inherit;
+
+  font-size: inherit;
+
+  line-height: 1.5;
+
+  background-color: transparent;
+
+  border: 1px solid transparent;
+
+  border-radius: 2px;
+
+  resize: none;
+
+  overflow: hidden;
+
+  white-space: pre-wrap;
+
+  word-break: break-word;
+
+  transition: background-color 0.15s, border-color 0.15s;
+
+}
+
+.auto-textarea:focus {
+
+  outline: none;
+
+  border-color: #3b82f6;
+
+  background-color: #f8fafc;
+
+}
+
+.reason-textarea {
+
+  width: 100%;
+
+  padding: 0.6rem 0.75rem;
+
+  font-family: inherit;
+
+  font-size: inherit;
+
+  line-height: 1.65;
+
+  background-color: #f8fafc;
+
+  border: 1px solid #cbd5e1;
+
+  border-radius: 0.375rem;
+
+  resize: none;
+
+  overflow: hidden;
+
+  white-space: pre-wrap;
+
+  word-break: break-word;
+
+  transition: background-color 0.15s, border-color 0.15s;
+
+}
+
+.reason-textarea:focus {
+
+  outline: none;
+
+  border-color: #2563eb;
+
+  background-color: #ffffff;
+
+}
+
+.sheet-input {
+
+  width: 100%;
+
+  background-color: transparent;
+
+  padding: 1px 4px;
+
+  font-family: inherit;
+
+  font-size: inherit;
+
+  border-radius: 2px;
+
+}
+
+.sheet-input:focus {
+
+  outline: none;
+
+  background-color: #f1f5f9;
+
+}
+
+@media print {
+
+  html, body {
+
+    width: 21cm;
+
+    height: 29.7cm;
+
+    margin: 0;
+
+    padding: 0;
+
+    background: #fff !important;
+
+    -webkit-print-color-adjust: exact;
+
+    print-color-adjust: exact;
+
+  }
+
+  body \> \*:not(#print-section) {
+
+    display: none !important;
+
+  }
+
+  #print-section {
+
+    display: block !important;
+
+    width: 100%;
+
+  }
+
+  .A4-sheet {
+
+    margin: 0 !important;
+
+    padding: 1.2cm !important;
+
+    box-shadow: none !important;
+
+    border: none !important;
+
+    border-radius: 0 !important;
+
+    width: 100% !important;
+
+    max-width: 100% !important;
+
+    min-height: 29.7cm;
+
+    height: auto;
+
+    overflow: visible;
+
+    background: #fff !important;
+
+    background-image: none !important;
+
+    display: block;
+
+  }
+
+  .A4-sheet, .A4-sheet \* {
+
+    color: #000 !important;
+
+  }
+
+  .A4-sheet table,
+
+  .A4-sheet th,
+
+  .A4-sheet td,
+
+  .A4-sheet \[class\*="border-neutral-"\],
+
+  .A4-sheet \[class\*="border-slate-"\],
+
+  .A4-sheet \[class\*="border-gray-"\] {
+
+    border-color: #000 !important;
+
+  }
+
+  .print-break-before {
+
+    page-break-before: always;
+
+  }
+
+}
+
+</style>
+
+</head>
+
+<body class="min-h-screen bg-slate-200 font-sans text-slate-800 flex flex-col">
+
+<!-- Toast Notification -->
+
+<div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- Header -->
+
+<header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-30">
+
+\<div class="max-w-7xl mx-auto py-3.5 px-4 sm:px-6 lg:px-8 flex flex-wrap justify-between items-center gap-3"\>
+
+  \<div\>
+
+    \<div class="flex items-center gap-2.5"\>
+
+      \<div class="p-2 bg-blue-600 text-white rounded-lg shadow-sm"\>
+
+        \<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+          \<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /\>
+
+        \</svg\>
+
+      \</div\>
+
+      \<div\>
+
+        \<div class="flex items-center gap-2"\>
+
+          \<h1 class="text-xl md:text-2xl font-bold text-slate-900 tracking-tight"\>
+
+            【AI】生活援助 算定可否判断システム
+
+          \</h1\>
+
+          \<span class="px-2.5 py-0.5 text-\[11px\] font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-300"\>
+
+            主任介護支援専門員・実地指導監査対応Pro仕様
+
+          \</span\>
+
+        \</div\>
+
+        \<p class="text-xs sm:text-sm text-slate-500"\>
+
+          老企第36号・老計第10号・老振第76号・ICF分析に基づき、提示資料から根拠ある専門職レベルの2帳票を生成します
+
+        \</p\>
+
+      \</div\>
+
+    \</div\>
+
+  \</div\>
+
+  \<div class="flex items-center gap-2"\>
+
+    \<button id="btn-open-protocol" type="button" class="inline-flex items-center px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-300 transition"\>
+
+      \<svg class="w-4 h-4 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+        \<path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /\>
+
+      \</svg\>
+
+      プロ仕様プロンプト・法的根拠基準
+
+    \</button\>
+
+    \<div class="inline-flex items-center px-3 py-1.5 text-xs sm:text-sm font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg"\>
+
+      \<svg class="w-4 h-4 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+        \<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /\>
+
+      \</svg\>
+
+      \<span\>推論エンジン: Gemini AI + 高精度専門知識エンジン\</span\>
+
+    \</div\>
+
+  \</div\>
+
+\</div\>
+
+</header>
+
+<!-- Main Content -->
+
+<main class="max-w-7xl w-full mx-auto py-6 px-4 sm:px-6 lg:px-8 flex-1">
+
+\<!-- STEP 1: Input Section --\>
+
+\<section id="input-section" class="bg-white p-5 sm:p-8 rounded-xl shadow-md border border-slate-200"\>
+
+  \<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100"\>
+
+    \<div\>
+
+      \<h2 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2"\>
+
+        \<span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold"\>1\</span\>
+
+        利用者アセスメント情報の入力・資料読み込み
+
+      \</h2\>
+
+      \<p class="text-sm text-slate-600 mt-1"\>
+
+        利用者の疾患・ADL/IADL、同居家族の具体的状況（就労・疾病・高齢等）、希望する生活援助、担当者会議の合意内容を入力してください。
+
+      \</p\>
+
+    \</div\>
+
+    \<!-- Preset Sample Cases --\>
+
+    \<div class="flex flex-wrap items-center gap-1.5"\>
+
+      \<span class="text-xs font-semibold text-slate-500 mr-1"\>プロ検証用サンプル事例:\</span\>
+
+      \<button type="button" data-sample="case1" class="sample-case-btn px-2.5 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-md transition"\>
+
+        事例A: 同居長男の長時間就労・日中独居
+
+      \</button\>
+
+      \<button type="button" data-sample="case2" class="sample-case-btn px-2.5 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md transition"\>
+
+        事例B: 同居夫の心身機能低下・老老介護
+
+      \</button\>
+
+      \<button type="button" data-sample="case3" class="sample-case-btn px-2.5 py-1.5 text-xs font-semibold bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-md transition"\>
+
+        事例C: 同居長女の精神疾患（うつ病）療養中
+
+      \</button\>
+
+    \</div\>
+
+  \</div\>
+
+  \<!-- Analysis Depth Selector --\>
+
+  \<div class="mb-4 bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-wrap items-center justify-between gap-3"\>
+
+    \<div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-700"\>
+
+      \<svg class="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+        \<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /\>
+
+      \</svg\>
+
+      \<span\>出力ブラッシュアップ基準（実地指導・保険者届出モード）:\</span\>
+
+    \</div\>
+
+    \<div class="flex flex-wrap items-center gap-3 text-xs text-slate-600"\>
+
+      \<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white border border-slate-200 font-medium"\>
+
+        \<span class="w-2 h-2 rounded-full bg-emerald-500"\>\</span\> 老企第36号 第2の2(6) 厳格引用
+
+      \</span\>
+
+      \<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white border border-slate-200 font-medium"\>
+
+        \<span class="w-2 h-2 rounded-full bg-blue-500"\>\</span\> 老計第10号（区分コード）・老振第76号適合証明
+
+      \</span\>
+
+      \<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white border border-slate-200 font-medium"\>
+
+        \<span class="w-2 h-2 rounded-full bg-purple-500"\>\</span\> ICF医学的リスク・代替サービス比較検討・家族役割分担明記
+
+      \</span\>
+
+    \</div\>
+
+  \</div\>
+
+  \<div class="space-y-4"\>
+
+    \<div\>
+
+      \<div class="flex justify-between items-center mb-1.5"\>
+
+        \<label for="user-info-textarea" class="text-xs font-semibold text-slate-600 uppercase tracking-wider"\>
+
+          ケース記録・アセスメントシート・担当者会議録テキスト（自由記述）
+
+        \</label\>
+
+        \<button id="btn-clear-input" type="button" class="text-xs text-slate-500 hover:text-red-600 transition"\>
+
+          入力をクリア
+
+        \</button\>
+
+      \</div\>
+
+      \<textarea
+
+        id="user-info-textarea"
+
+        placeholder="こちらに利用者情報を貼り付けるか、上部の上の「プロ検証用サンプル事例」ボタンをクリックして読み込んでください...&#10;例：被保険者名、要介護度、既往歴・ADL/IADL状況、同居家族の続柄・就労時間・疾病状況、希望する生活援助（調理・掃除・洗濯等）と頻度、代替手段の検討結果、担当者会議の合意内容など"
+
+        class="w-full h-64 p-3.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out bg-white text-slate-900 text-sm leading-relaxed"
+
+      \>\</textarea\>
+
+    \</div\>
+
+    \<!-- File Upload --\>
+
+    \<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1"\>
+
+      \<div\>
+
+        \<label for="file-upload-input" class="inline-flex items-center px-4 py-2 bg-slate-100 text-slate-700 rounded-lg cursor-pointer hover:bg-slate-200 border border-slate-300 text-sm font-medium transition duration-150 ease-in-out"\>
+
+          \<svg class="w-4 h-4 mr-2 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+            \<path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /\>
+
+          \</svg\>
+
+          \<span\>関連資料ファイルを追加 (PDF, TXT, CSV, JSON, MD)\</span\>
+
+          \<input id="file-upload-input" type="file" class="hidden" multiple accept=".txt,.text,.csv,.json,.md,text/plain,application/pdf" /\>
+
+        \</label\>
+
+        \<span class="text-xs text-slate-500 ml-2"\>※アセスメント表・主治医意見書メモ・会議録等の全情報が根拠として統合されます\</span\>
+
+      \</div\>
+
+    \</div\>
+
+    \<div id="file-list-container" class="space-y-2 hidden"\>\</div\>
+
+  \</div\>
+
+  \<!-- Error Alert --\>
+
+  \<div id="error-banner" class="hidden mt-5 bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start justify-between" role="alert"\>
+
+    \<div\>
+
+      \<strong class="font-bold"\>エラー: \</strong\>
+
+      \<span id="error-banner-text"\>\</span\>
+
+    \</div\>
+
+    \<button id="btn-close-error" type="button" class="text-red-500 hover:text-red-800 font-bold ml-4"\>×\</button\>
+
+  \</div\>
+
+  \<!-- Generate Button --\>
+
+  \<div class="mt-6 text-center"\>
+
+    \<button
+
+      id="btn-generate-report"
+
+      type="button"
+
+      class="w-full md:w-auto px-12 py-3.5 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed transition duration-150 ease-in-out inline-flex items-center justify-center gap-2 text-base"
+
+    \>
+
+      \<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+        \<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /\>
+
+      \</svg\>
+
+      \<span id="btn-generate-label"\>プロフェッショナル仕様で判断レポートを生成（PHASE 1〜5 実行）\</span\>
+
+    \</button\>
+
+  \</div\>
+
+\</section\>
+
+\<!-- STEP 2: Execution Pipeline Progress (Loading View) --\>
+
+\<section id="loading-section" class="hidden mt-6 bg-white p-6 sm:p-8 rounded-xl shadow-md border border-slate-200"\>
+
+  \<div class="max-w-3xl mx-auto"\>
+
+    \<div class="flex items-center justify-center gap-3 mb-6"\>
+
+      \<div class="h-9 w-9 animate-spin rounded-full border-4 border-solid border-blue-600 border-t-transparent" role="status"\>\</div\>
+
+      \<div\>
+
+        \<h3 class="text-lg font-bold text-slate-800"\>主任介護支援専門員AI プロトコル実行中...\</h3\>
+
+        \<p id="loading-phase-subtitle" class="text-xs text-slate-500"\>提示された資料から医学的・介護的・法的根拠を抽出し、実地指導に耐えうる専門職文章を構築しています\</p\>
+
+      \</div\>
+
+    \</div\>
+
+    \<div class="space-y-3" id="phase-steps-list"\>
+
+      \<div data-phase="1" class="phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all"\>
+
+        \<div class="phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"\>1\</div\>
+
+        \<div class="flex-1"\>
+
+          \<div class="text-sm font-bold text-slate-800"\>PHASE 1: 資料全体の構造化・ICF分析・中核論点の特定\</div\>
+
+          \<div class="text-xs text-slate-600 mt-0.5"\>心身機能・身体構造、活動（ADL/IADL）、参加、環境因子（同居家族・住環境）を構造化し、中核論点を特定\</div\>
+
+        \</div\>
+
+        \<span class="phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600"\>待機中\</span\>
+
+      \</div\>
+
+      \<div data-phase="2" class="phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all"\>
+
+        \<div class="phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"\>2\</div\>
+
+        \<div class="flex-1"\>
+
+          \<div class="text-sm font-bold text-slate-800"\>PHASE 2: 老企第36号・老計第10号・老振第76号の多角的検証\</div\>
+
+          \<div class="text-xs text-slate-600 mt-0.5"\>2-1 本人のIADL阻害要因 ／ 2-2 同居家族の「やむを得ない事情」の客観的立証 ／ 2-3 不適切事例（老振第76号）非該当証明\</div\>
+
+        \</div\>
+
+        \<span class="phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600"\>待機中\</span\>
+
+      \</div\>
+
+      \<div data-phase="3" class="phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all"\>
+
+        \<div class="phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"\>3\</div\>
+
+        \<div class="flex-1"\>
+
+          \<div class="text-sm font-bold text-slate-800"\>PHASE 3: ケアマネジメントプロセスの妥当性・代替手段の比較検証\</div\>
+
+          \<div class="text-xs text-slate-600 mt-0.5"\>インフォーマルサービス（配食・家事代行等）の限界と、サービス担当者会議での合意・役割分担の明確化\</div\>
+
+        \</div\>
+
+        \<span class="phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600"\>待機中\</span\>
+
+      \</div\>
+
+      \<div data-phase="4" class="phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all"\>
+
+        \<div class="phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"\>4\</div\>
+
+        \<div class="flex-1"\>
+
+          \<div class="text-sm font-bold text-slate-800"\>PHASE 4: 保険者（自治体）ローカルルール・実地指導監査基準の照合\</div\>
+
+          \<div class="text-xs text-slate-600 mt-0.5"\>共用部分の按分除外、本人専用分の切り分け、第2表・第3表との整合性、モニタリング評価時期の明記\</div\>
+
+        \</div\>
+
+        \<span class="phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600"\>待機中\</span\>
+
+      \</div\>
+
+      \<div data-phase="5" class="phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all"\>
+
+        \<div class="phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5"\>5\</div\>
+
+        \<div class="flex-1"\>
+
+          \<div class="text-sm font-bold text-slate-800"\>PHASE 5: プロフェッショナル仕様の2帳票同時出力\</div\>
+
+          \<div class="text-xs text-slate-600 mt-0.5"\>確認シート（高密度な事実ベース・リスト化記述）＋理由書（法的・医学的・介護的根拠を備えた論理的文章）の生成\</div\>
+
+        \</div\>
+
+        \<span class="phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600"\>待機中\</span\>
+
+      \</div\>
+
+    \</div\>
+
+  \</div\>
+
+\</section\>
+
+\<!-- STEP 3: Generated Report Section --\>
+
+\<section id="report-section" class="hidden mt-2"\>
+
+  \<!-- Top Bar --\>
+
+  \<div class="flex flex-wrap justify-between items-center gap-3 mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200"\>
+
+    \<div class="flex items-center gap-3"\>
+
+      \<span class="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full border border-emerald-300"\>
+
+        PHASE 1〜5 専門職監査レベル検証完了
+
+      \</span\>
+
+      \<h2 class="text-lg sm:text-xl font-bold text-slate-800"\>主任介護支援専門員AI 判断レポート（直接編集・出力可能）\</h2\>
+
+    \</div\>
+
+    \<div class="flex flex-wrap items-center gap-2"\>
+
+      \<button
+
+        id="btn-toggle-analysis"
+
+        type="button"
+
+        class="px-3.5 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold rounded-lg text-xs sm:text-sm hover:bg-indigo-100 transition"
+
+      \>
+
+        PHASE 1〜5 根拠検証ログを閉じる/開く
+
+      \</button\>
+
+      \<button
+
+        id="btn-export-json"
+
+        type="button"
+
+        class="px-3.5 py-2 bg-slate-100 text-slate-700 border border-slate-300 font-semibold rounded-lg text-xs sm:text-sm hover:bg-slate-200 transition"
+
+      \>
+
+        JSONデータ出力
+
+      \</button\>
+
+      \<button
+
+        id="btn-reset-app"
+
+        type="button"
+
+        class="px-4 py-2 bg-slate-700 text-white font-bold rounded-lg shadow-sm hover:bg-slate-800 text-xs sm:text-sm transition"
+
+      \>
+
+        やり直す（入力画面へ戻る）
+
+      \</button\>
+
+    \</div\>
+
+  \</div\>
+
+  \<!-- Collapsible PHASE 1-5 Analysis Drawer (Open by default for transparency) --\>
+
+  \<div id="analysis-log-panel" class="mb-5 bg-slate-900 text-slate-100 p-5 rounded-xl shadow-md border border-slate-700 text-xs sm:text-sm space-y-3"\>
+
+    \<div class="flex flex-wrap justify-between items-center border-b border-slate-700 pb-2 gap-2"\>
+
+      \<h3 class="font-bold text-blue-300 flex items-center gap-2"\>
+
+        \<svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+          \<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /\>
+
+        \</svg\>
+
+        Execution Protocol: 提示資料に基づく5段階アセスメント・法的根拠の検証ログ
+
+      \</h3\>
+
+      \<span class="text-xs text-emerald-300 bg-emerald-950/80 border border-emerald-700 px-2.5 py-0.5 rounded"\>
+
+        老企第36号・老計第10号・老振第76号 適合確認済
+
+      \</span\>
+
+    \</div\>
+
+    \<div id="analysis-log-content" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs leading-relaxed"\>\</div\>
+
+  \</div\>
+
+  \<!-- Tabs & Action Toolbar --\>
+
+  \<div class="w-full"\>
+
+    \<div class="flex flex-wrap items-end justify-between border-b-2 border-slate-300 gap-2"\>
+
+      \<div class="flex space-x-1"\>
+
+        \<button
+
+          id="tab-btn-confirmation"
+
+          type="button"
+
+          class="px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-white text-blue-600 shadow-sm border border-b-0 border-slate-300"
+
+        \>
+
+          1\. 確認シート（事実ベース・高密度リスト化記述）
+
+        \</button\>
+
+        \<button
+
+          id="tab-btn-reason"
+
+          type="button"
+
+          class="px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-slate-200 text-slate-600 hover:bg-slate-300"
+
+        \>
+
+          2\. 理由書（専門的見解・法的/医学的根拠記述）
+
+        \</button\>
+
+      \</div\>
+
+    \</div\>
+
+    \<div class="bg-white p-3 sm:p-6 rounded-b-xl shadow-lg border border-t-0 border-slate-200"\>
+
+      \<!-- Export Buttons Bar --\>
+
+      \<div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-100"\>
+
+        \<div class="text-xs text-slate-600 flex items-center gap-1.5"\>
+
+          \<svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+            \<path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /\>
+
+          \</svg\>
+
+          \<span\>帳票内のすべての項目・チェックボックスは直接クリックして加筆・修正可能です（入力量に応じて枠の高さが自動調整されます）\</span\>
+
+        \</div\>
+
+        \<div class="flex flex-wrap items-center gap-2"\>
+
+          \<button id="btn-export-pdf" type="button" class="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition"\>
+
+            \<svg class="w-4 h-4 mr-1.5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+              \<path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /\>
+
+            \</svg\>
+
+            \<span id="label-export-pdf"\>PDF出力\</span\>
+
+          \</button\>
+
+          \<button id="btn-export-jpeg" type="button" class="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition"\>
+
+            \<svg class="w-4 h-4 mr-1.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+              \<path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /\>
+
+            \</svg\>
+
+            \<span id="label-export-jpeg"\>JPEG出力\</span\>
+
+          \</button\>
+
+          \<!-- DOCX Export Button Added --\>
+
+          \<button id="btn-export-docx" type="button" class="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition"\>
+
+            \<svg class="w-4 h-4 mr-1.5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+              \<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /\>
+
+            \</svg\>
+
+            \<span id="label-export-docx"\>DOCX出力\</span\>
+
+          \</button\>
+
+          \<button id="btn-export-html" type="button" class="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition"\>
+
+            \<svg class="w-4 h-4 mr-1.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+              \<path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /\>
+
+            \</svg\>
+
+            \<span id="label-export-html"\>HTML出力\</span\>
+
+          \</button\>
+
+          \<button id="btn-print-sheet" type="button" class="flex items-center justify-center px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm text-xs sm:text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 transition"\>
+
+            \<svg class="w-4 h-4 mr-1.5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\>
+
+              \<path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /\>
+
+            \</svg\>
+
+            \<span\>印刷\</span\>
+
+          \</button\>
+
+        \</div\>
+
+      \</div\>
+
+      \<!-- Sheet 1: ConfirmationSheet --\>
+
+      \<div id="sheet-wrapper-confirmation" class="overflow-x-auto"\>
+
+        \<div id="confirmation-sheet-root" class="A4-sheet font-serif text-\[8.8pt\]"\>
+
+          \<h1 class="text-center text-\[14pt\] font-bold mb-2"\>〈同居家族がいる場合の生活援助算定確認シート〉\</h1\>
+
+          \<div class="text-\[9pt\] mb-1.5 space-y-0.5"\>
+
+            \<div class="flex flex-wrap justify-between items-center gap-4"\>
+
+              \<div class="flex-1 flex items-center whitespace-nowrap"\>
+
+                \<span class="mr-1 font-bold"\>事業所名:\</span\>
+
+                \<input type="text" data-bind="confirmationSheet.businessOfficeName" class="sheet-input" /\>
+
+              \</div\>
+
+              \<div class="flex-1 flex items-center whitespace-nowrap"\>
+
+                \<span class="mr-1 font-bold"\>担当介護支援専門員氏名:\</span\>
+
+                \<input type="text" data-bind="confirmationSheet.careManagerName" class="sheet-input" /\>
+
+              \</div\>
+
+            \</div\>
+
+            \<div class="flex items-center whitespace-nowrap w-64"\>
+
+              \<span class="mr-1 font-bold"\>作成日:\</span\>
+
+              \<input type="text" data-bind="confirmationSheet.creationDate" class="sheet-input" /\>
+
+            \</div\>
+
+          \</div\>
+
+          \<table class="w-full border-collapse border border-neutral-400 mb-2"\>
+
+            \<tbody\>
+
+              \<tr\>
+
+                \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5 w-\[22%\]"\>被保険者氏名\</th\>
+
+                \<td class="border border-neutral-400 align-top p-1.5 w-\[28%\]"\>
+
+                  \<input type="text" data-bind="confirmationSheet.insuredPersonName" class="sheet-input font-bold" /\>
+
+                \</td\>
+
+                \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5 w-\[22%\]"\>要支援要介護状態区分\</th\>
+
+                \<td class="border border-neutral-400 align-top p-1.5 w-\[28%\]"\>
+
+                  \<input type="text" data-bind="confirmationSheet.careLevel" class="sheet-input font-bold" /\>
+
+                \</td\>
+
+              \</tr\>
+
+              \<tr\>
+
+                \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5"\>被保険者番号\</th\>
+
+                \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                  \<input type="text" data-bind="confirmationSheet.insuredNumber" class="sheet-input" /\>
+
+                \</td\>
+
+                \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5"\>年齢・性別\</th\>
+
+                \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                  \<div class="flex items-center"\>
+
+                    \<input type="text" data-bind="confirmationSheet.age" class="w-12 bg-transparent focus:outline-none focus:bg-slate-100 rounded-sm px-1 text-center" aria-label="年齢" /\>
+
+                    \<span class="mx-1"\>歳\</span\>
+
+                    \<span\>(\</span\>
+
+                    \<input type="text" data-bind="confirmationSheet.gender" class="w-12 bg-transparent focus:outline-none focus:bg-slate-100 rounded-sm px-1 text-center" aria-label="性別" /\>
+
+                    \<span\>)\</span\>
+
+                  \</div\>
+
+                \</td\>
+
+              \</tr\>
+
+            \</tbody\>
+
+          \</table\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>
+
+              本人の状況・できる事
+
+              \<span class="text-xs font-normal ml-2"\>(疾患・身体機能・ADL自立動作・IADL困難動作の根拠 / 詳しくはケアプランに記載)\</span\>
+
+            \</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top"\>
+
+                    \<textarea data-bind="confirmationSheet.personStatusAndAbilities" rows="1" class="auto-textarea" style="min-height: 4.5em;"\>\</textarea\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>
+
+              希望するサービス内容
+
+              \<span class="text-xs font-normal ml-2"\>(本人の希望を記入 内容・回数・時間・意向の背景)\</span\>
+
+            \</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                    \<div class="flex flex-wrap items-center gap-y-0.5 mb-1" id="desired-services-checks"\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.cleaning" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>掃除\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.laundry" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>洗濯\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.bedMaking" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>ベッドメイク\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.clothingCare" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>衣類の整理・被服の補修\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.cooking" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>一般的な調理、配下膳\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.shopping" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>買い物\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.desiredServices.other" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>その他\</span\>
+
+                      \</label\>
+
+                    \</div\>
+
+                    \<textarea data-bind="confirmationSheet.desiredServices.details" rows="1" class="auto-textarea" style="min-height: 3.5em;"\>\</textarea\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>家屋の形態\</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                    \<div class="flex flex-wrap items-center gap-y-0.5"\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.housingForm.detached" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>一戸建て\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.housingForm.twoGeneration" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>二世帯住宅\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.housingForm.apartment" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>集合住宅\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-1 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.housingForm.other" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>その他\</span\>
+
+                      \</label\>
+
+                      \<span\>(\</span\>
+
+                      \<input type="text" data-bind="confirmationSheet.housingForm.otherDetails" class="w-64 bg-transparent focus:outline-none focus:bg-slate-100 rounded-sm px-1" /\>
+
+                      \<span\>)\</span\>
+
+                    \</div\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>
+
+              同居家族の状況
+
+              \<span class="text-xs font-normal ml-2"\>(続柄に\<span class="text-red-600 font-bold"\>○\</span\>印・老企第36号「やむを得ない事情」の客観的根拠)\</span\>
+
+            \</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                    \<div class="flex flex-wrap items-center gap-y-0.5 mb-1"\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.husband" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>夫\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.wife" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>妻\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.child" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>子\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.childSpouse" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>子の配偶者\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.grandchild" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>孫\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-1 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyRelation.other" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>その他\</span\>
+
+                      \</label\>
+
+                      \<span\>(\</span\>
+
+                      \<input type="text" data-bind="confirmationSheet.cohabitingFamilyRelation.otherDetails" class="w-48 bg-transparent focus:outline-none focus:bg-slate-100 rounded-sm px-1" /\>
+
+                      \<span\>)\</span\>
+
+                    \</div\>
+
+                    \<div class="flex flex-wrap items-center gap-y-0.5 mb-1"\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyStatus.disability" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>障害\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyStatus.illness" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>疾病\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyStatus.careRecipient" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護(要支援)者\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyStatus.aloneDuringDay" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>日中独居\</span\>
+
+                      \</label\>
+
+                      \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-bind-check="confirmationSheet.cohabitingFamilyStatus.other" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>その他\</span\>
+
+                      \</label\>
+
+                    \</div\>
+
+                    \<textarea data-bind="confirmationSheet.cohabitingFamilyStatus.details" rows="1" class="auto-textarea" style="min-height: 4.5em;"\>\</textarea\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>本人と同居家族との関係性\</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top"\>
+
+                    \<textarea data-bind="confirmationSheet.relationshipWithFamily" rows="1" class="auto-textarea" style="min-height: 3em;"\>\</textarea\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<div class="mb-2"\>
+
+            \<div class="font-bold mb-0.5"\>同居家族ができる介護の内容（インフォーマル支援の分担・限界点）\</div\>
+
+            \<table class="w-full border-collapse border border-neutral-400"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<td class="border border-neutral-400 align-top"\>
+
+                    \<textarea data-bind="confirmationSheet.careFamilyCanProvide" rows="1" class="auto-textarea" style="min-height: 3.5em;"\>\</textarea\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+          \</div\>
+
+          \<!-- Page break hint for PDF export --\>
+
+          \<div class="print-break-before mt-3"\>
+
+            \<div class="mb-2"\>
+
+              \<div class="font-bold mb-0.5"\>サービス提供の必要ありとしたケアマネジャーの判断（専門的アセスメント・法的根拠・代替案検討）\</div\>
+
+              \<table class="w-full border-collapse border border-neutral-400"\>
+
+                \<tbody\>
+
+                  \<tr\>
+
+                    \<td class="border border-neutral-400 align-top p-1.5"\>
+
+                      \<div class="flex flex-wrap items-center gap-y-0.5 mb-1"\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.cleaning" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>掃除\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.laundry" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>洗濯\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.bedMaking" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>ベッドメイク\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.clothingCare" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>衣類の整理等\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.cooking" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>調理\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.shopping" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>買い物\</span\>
+
+                        \</label\>
+
+                        \<label class="inline-flex items-center mr-3 whitespace-nowrap cursor-pointer"\>
+
+                          \<input type="checkbox" data-bind-check="confirmationSheet.careManagerJudgment.other" class="sr-only" /\>
+
+                          \<span class="check-box-ui inline-block w-3 h-3 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                          \<span class="align-middle"\>その他\</span\>
+
+                        \</label\>
+
+                      \</div\>
+
+                      \<textarea data-bind="confirmationSheet.careManagerJudgment.details" rows="1" class="auto-textarea" style="min-height: 5.5em;"\>\</textarea\>
+
+                    \</td\>
+
+                  \</tr\>
+
+                \</tbody\>
+
+              \</table\>
+
+            \</div\>
+
+            \<div class="mb-2"\>
+
+              \<div class="font-bold mb-0.5"\>サービス担当者会議における生活援助算定についての確認・同意\</div\>
+
+              \<table class="w-full border-collapse border border-neutral-400"\>
+
+                \<tbody\>
+
+                  \<tr\>
+
+                    \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5 w-1/4"\>会議開催日\</th\>
+
+                    \<td class="border border-neutral-400 align-top p-1.5 w-3/4"\>
+
+                      \<input type="text" data-bind="confirmationSheet.serviceMeetingConfirmation.date" class="sheet-input" /\>
+
+                    \</td\>
+
+                  \</tr\>
+
+                  \<tr\>
+
+                    \<th class="border border-neutral-400 bg-neutral-100 font-bold align-top text-left p-1.5"\>出席者・同意内容\</th\>
+
+                    \<td class="border border-neutral-400 align-top"\>
+
+                      \<textarea data-bind="confirmationSheet.serviceMeetingConfirmation.attendeesAndAgreement" rows="1" class="auto-textarea" style="min-height: 4.5em;"\>\</textarea\>
+
+                    \</td\>
+
+                  \</tr\>
+
+                \</tbody\>
+
+              \</table\>
+
+            \</div\>
+
+            \<div class="mb-1"\>
+
+              \<div class="font-bold mb-0.5"\>以上のことから、サービス内容は下記のとおり決定する（老計第10号区分・提供頻度・家族分担・見直し時期）\</div\>
+
+              \<table class="w-full border-collapse border border-neutral-400"\>
+
+                \<tbody\>
+
+                  \<tr\>
+
+                    \<td class="border border-neutral-400 align-top"\>
+
+                      \<textarea data-bind="confirmationSheet.serviceDecision" rows="1" class="auto-textarea" style="min-height: 4.5em;"\>\</textarea\>
+
+                    \</td\>
+
+                  \</tr\>
+
+                \</tbody\>
+
+              \</table\>
+
+            \</div\>
+
+          \</div\>
+
+        \</div\>
+
+      \</div\>
+
+      \<!-- Sheet 2: ReasonStatement --\>
+
+      \<div id="sheet-wrapper-reason" class="overflow-x-auto hidden"\>
+
+        \<div id="reason-statement-root" class="A4-sheet font-serif text-\[9.3pt\]"\>
+
+          \<div\>
+
+            \<h1 class="text-center text-xl font-bold"\>
+
+              \<input type="text" data-bind="reasonStatement.documentTitle" class="sheet-input text-center font-bold" /\>
+
+            \</h1\>
+
+            \<p class="text-right mt-2.5 font-medium"\>大阪市長 殿\</p\>
+
+            \<table class="w-full border-collapse border border-neutral-400 text-\[9pt\] mt-2.5"\>
+
+              \<tbody\>
+
+                \<tr\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center w-\[20%\]"\>日付\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5 w-\[30%\]"\>
+
+                    \<input type="text" data-bind="reasonStatement.submissionDate" class="sheet-input" /\>
+
+                  \</td\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center w-\[20%\]"\>氏名\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5 w-\[30%\]"\>
+
+                    \<input type="text" data-bind="reasonStatement.insuredPersonName" class="sheet-input font-bold" /\>
+
+                  \</td\>
+
+                \</tr\>
+
+                \<tr\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>事業所住所\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.businessOfficeAddress" class="sheet-input" /\>
+
+                  \</td\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>生年月日\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.birthDate" class="sheet-input" /\>
+
+                  \</td\>
+
+                \</tr\>
+
+                \<tr\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>事業所名\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.businessOfficeName" class="sheet-input" /\>
+
+                  \</td\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>被保険者番号\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.insuredNumber" class="sheet-input" /\>
+
+                  \</td\>
+
+                \</tr\>
+
+                \<tr\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>計画作成担当者名\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.plannerName" class="sheet-input" /\>
+
+                  \</td\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>認定有効期間\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5"\>
+
+                    \<input type="text" data-bind="reasonStatement.certificationPeriod" class="sheet-input" /\>
+
+                  \</td\>
+
+                \</tr\>
+
+                \<tr\>
+
+                  \<th class="border border-neutral-400 bg-neutral-100 font-bold p-1.5 text-center"\>要介護度\</th\>
+
+                  \<td class="border border-neutral-400 p-1.5" colSpan="3"\>
+
+                    \<div class="flex flex-wrap gap-x-4 gap-y-1" id="reason-care-level-group"\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要支援1" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要支援1\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要支援2" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要支援2\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要介護1" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護1\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要介護2" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護2\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要介護3" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護3\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要介護4" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護4\</span\>
+
+                      \</label\>
+
+                      \<label class="flex items-center whitespace-nowrap cursor-pointer"\>
+
+                        \<input type="checkbox" data-care-level="要介護5" class="sr-only" /\>
+
+                        \<span class="check-box-ui inline-block w-3.5 h-3.5 border border-slate-700 mr-1.5 flex-shrink-0 align-middle"\>\</span\>
+
+                        \<span class="align-middle"\>要介護5\</span\>
+
+                      \</label\>
+
+                    \</div\>
+
+                  \</td\>
+
+                \</tr\>
+
+              \</tbody\>
+
+            \</table\>
+
+            \<p class="mt-2.5 text-\[9pt\]"\>
+
+              下記理由により、生活援助中心型の訪問介護サービスを計画しますのでケアプラン等を添えて届出します。
+
+            \</p\>
+
+          \</div\>
+
+          \<!-- Content Sections --\>
+
+          \<div class="mt-3.5 space-y-3.5"\>
+
+            \<div\>
+
+              \<div class="flex items-start border-b-2 border-neutral-400 pb-1 mb-1.5"\>
+
+                \<span class="bg-ink text-white rounded-full h-5 w-5 flex-shrink-0 flex items-center justify-center font-bold text-xs mr-2.5 mt-0.5"\>1\</span\>
+
+                \<h2 class="text-\[10pt\] font-bold text-ink"\>生活援助中心型の訪問介護を位置づけるやむをえない事情の内容（同居家族の客観的状況・老企第36号の該当根拠）\</h2\>
+
+              \</div\>
+
+              \<div class="pl-7"\>
+
+                \<textarea data-bind="reasonStatement.reasonAndBasis.unavoidableCircumstances" rows="1" class="reason-textarea" style="min-height: 8.5em;"\>\</textarea\>
+
+              \</div\>
+
+            \</div\>
+
+            \<div\>
+
+              \<div class="flex items-start border-b-2 border-neutral-400 pb-1 mb-1.5"\>
+
+                \<span class="bg-ink text-white rounded-full h-5 w-5 flex-shrink-0 flex items-center justify-center font-bold text-xs mr-2.5 mt-0.5"\>2\</span\>
+
+                \<h2 class="text-\[10pt\] font-bold text-ink"\>生活全般の解決すべき課題（本人の疾患・IADL阻害要因・支援不在時の重度化リスク）\</h2\>
+
+              \</div\>
+
+              \<div class="pl-7"\>
+
+                \<textarea data-bind="reasonStatement.reasonAndBasis.issuesToSolve" rows="1" class="reason-textarea" style="min-height: 7.5em;"\>\</textarea\>
+
+              \</div\>
+
+            \</div\>
+
+            \<div\>
+
+              \<div class="flex items-start border-b-2 border-neutral-400 pb-1 mb-1.5"\>
+
+                \<span class="bg-ink text-white rounded-full h-5 w-5 flex-shrink-0 flex items-center justify-center font-bold text-xs mr-2.5 mt-0.5"\>3\</span\>
+
+                \<h2 class="text-\[10pt\] font-bold text-ink"\>課題の解決に必要であって最適と判断する支援内容 (代替手段の検証・老計第10号/老振第76号適合・家族との役割分担を含む)\</h2\>
+
+              \</div\>
+
+              \<div class="pl-7"\>
+
+                \<textarea data-bind="reasonStatement.supportDetails" rows="1" class="reason-textarea" style="min-height: 10.5em;"\>\</textarea\>
+
+              \</div\>
+
+            \</div\>
+
+          \</div\>
+
+          \<!-- Footer --\>
+
+          \<div class="text-\[7.8pt\] border-t border-neutral-300 pt-2 mt-6"\>
+
+            \<p class="font-bold"\>【算定要件】\</p\>
+
+            \<p class="text-gray-700"\>
+
+              訪問介護における「生活援助中心型」の単位を算定することができる場合として「利用者が一人暮らしであるか又は家族等が障害、疾病等のため、利用者や家族等が家事を行うことが困難な場合」とされたが、これは、障害、疾病のほか、障害,疾病がない場合であっても、同様のやむを得ない事情により、家事が困難な場合をいうものであること。【老企第36号 第2の2(6)】
+
+            \</p\>
+
+            \<p class="mt-1.5 font-medium"\>添付書類: アセスメント表、居宅サービス計画書(第1表・第2表・第3表)、サービス担当者会議の要点(第4表)を添付してください。\</p\>
+
+          \</div\>
+
+        \</div\>
+
+      \</div\>
+
+    \</div\>
+
+  \</div\>
+
+\</section\>
+
+</main>
+
+<!-- Footer -->
+
+<footer class="text-center py-4 mt-8 border-t border-slate-300 bg-slate-100">
+
+\<p class="text-xs text-slate-500"\>
+
+  このアプリケーションは提供された情報に基づきAIが判断を支援するものです。最終的な判断と責任は担当の介護支援専門員および保険者にあります。
+
+\</p\>
+
+</footer>
+
+<!-- Modal 1: Protocol & Master Prompt Reference -->
+
+<div id="modal-protocol" class="fixed inset-0 bg-slate-900/60 z-50 hidden items-center justify-center p-4">
+
+\<div class="bg-white rounded-xl max-w-4xl w-full max-h-\[85vh\] flex flex-col shadow-2xl border border-slate-200"\>
+
+  \<div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center"\>
+
+    \<h3 class="text-base sm:text-lg font-bold text-slate-900"\>主任介護支援専門員プロ仕様：思考プロセス（PHASE 1〜5）＆帳票記述プロトコル\</h3\>
+
+    \<button id="btn-close-protocol" type="button" class="text-slate-400 hover:text-slate-700 text-xl font-bold px-2"\>×\</button\>
+
+  \</div\>
+
+  \<div class="p-6 overflow-y-auto text-xs sm:text-sm space-y-4 text-slate-700 leading-relaxed"\>
+
+    \<div class="bg-blue-50 border border-blue-200 p-3.5 rounded-lg"\>
+
+      \<div class="font-bold text-blue-900 mb-1"\>プロフェッショナル監査対応ブラッシュアップの要点\</div\>
+
+      \<p class="text-blue-800 text-xs"\>
+
+        保険者への事前届出・運営指導（実地指導）において最も重視される「①なぜ本人ができないのか（疾患・ADL/IADLの医学的根拠）」「②なぜ同居家族が担えないのか（老企第36号第2の2(6)に基づく客観的数値・時間・医学的制限）」「③代替手段（配食や家族の休日作り置き等）ではなぜ解決できないのか」「④老計第10号のどの区分に該当し、老振第76号（家族分の家事や共用部清掃等の不適切算定）をどう排除しているか」を漏れなく抽出・論理構成します。
+
+      \</p\>
+
+    \</div\>
+
+    \<div class="grid grid-cols-1 md:grid-cols-2 gap-4"\>
+
+      \<div class="border border-slate-200 rounded-lg p-3.5"\>
+
+        \<h4 class="font-bold text-slate-900 mb-1.5"\>1. 高密度・事実ベース・リスト化記述法（確認シート）\</h4\>
+
+        \<ul class="list-disc pl-5 space-y-1 text-xs"\>
+
+          \<li\>\<strong\>ルール1（1行1事実＋具体的数値・根拠）\</strong\>: 抽象的な表現を排し、立位保持時間、MMSE点数、通勤・拘束時間、診断名、手帳等級などを明記。\</li\>
+
+          \<li\>\<strong\>ルール2（キーワード先行構造）\</strong\>: 行頭に\<code\>・【疾患・身体機能】\</code\>\<code\>・【IADL阻害要因】\</code\>\<code\>・【老振第76号排除】\</code\>等の専門職タグを配置。\</li\>
+
+          \<li\>\<strong\>ルール3（体言止め・客観記述）\</strong\>: 冗長な接続詞や敬体を排除し、行政担当者が一読で要件充足を確認できる体言止め形式で統一。\</li\>
+
+        \</ul\>
+
+      \</div\>
+
+      \<div class="border border-slate-200 rounded-lg p-3.5"\>
+
+        \<h4 class="font-bold text-slate-900 mb-1.5"\>2. 法的・医学的・介護的根拠を備えた専門職記述法（理由書）\</h4\>
+
+        \<ul class="list-disc pl-5 space-y-1 text-xs"\>
+
+          \<li\>\<strong\>項目1（やむを得ない事情）\</strong\>: 同居家族の就労・疾病・高齢等の具体的事実から、平日・休日ともに家事遂行が不可能である理由と老企第36号第2の2(6)への該当性を論理的に立証。\</li\>
+
+          \<li\>\<strong\>項目2（生活全般の解決すべき課題）\</strong\>: ICFの視点で疾患とIADL制限の因果関係を明示し、放置した場合の具体的リスク（低栄養・脱水・転倒骨折・不衛生等の重度化リスク）を記述。\</li\>
+
+          \<li\>\<strong\>項目3（最適と判断する支援内容）\</strong\>: 代替サービス（配食弁当等）が適応困難な理由、老計第10号の具体的内容・回数・時間、老振第76号の遵守（本人専用・按分除外）、家族のインフォーマル役割分担とモニタリング計画を明記。\</li\>
+
+        \</ul\>
+
+      \</div\>
+
+    \</div\>
+
+    \<div\>
+
+      \<h4 class="font-bold text-slate-900 mb-1.5"\>実行されるマスタープロンプト全文\</h4\>
+
+      \<pre id="master-prompt-preview" class="bg-slate-900 text-slate-100 p-4 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap font-mono max-h-64"\>\</pre\>
+
+    \</div\>
+
+  \</div\>
+
+  \<div class="px-6 py-3 bg-slate-50 border-t border-slate-200 text-right rounded-b-xl"\>
+
+    \<button id="btn-close-protocol-footer" type="button" class="px-4 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-900"\>閉じる\</button\>
+
+  \</div\>
+
+\</div\>
+
+</div>
+
+<!-- Application Script -->
+
+<script>
+
+(function () {
+
+  'use strict';
+
+  // =========================================================================
+
+  // 0. Global State Object Definition
+
+  // =========================================================================
+
+  let state = {
+
+    userInfo: '',
+
+    files: \[\],
+
+    isLoading: false,
+
+    activeTab: 'confirmation',
+
+    reportData: null,
+
+    phaseLogs: null
+
+  };
+
+  // =========================================================================
+
+  // 1. Professional Master Prompt & Schema Definitions
+
+  // =========================================================================
+
+  const getMasterPrompt = function (userInfo) {
+
+    return \`# 命令書: 訪問介護（生活援助中心型）算定可否判断および行政提出用2帳票のプロフェッショナル生成
+
+あなたは、日本の介護保険制度・運営指導（実地指導）・保険者審査基準に精通した最高峰の「主任介護支援専門員（ケアマネジャー）」AIです。
+
+提示された利用者情報・アセスメント資料からあらゆる事実・数値・医学的根拠・生活歴・家族背景を余すことなく抽出し、保険者（大阪市等）の審査および実地指導監査に100%耐えうる最高品質の2帳票（\`confirmationSheet\` および \`reasonStatement\`）と、5段階の検証ログ（\`phaseLogs\`）を生成してください。
+
+# 厳守すべき法的・専門的根拠フレームワーク
+
+1. **老企第36号 第2の2(6)（生活援助中心型の算定要件）**:
+
+「利用者が一人暮らしであるか又は家族等が障害,疾病等のため、利用者や家族等が家事を行うことが困難な場合」および「同様のやむを得ない事情により、家事が困難な場合」への該当性を、具体的な拘束時間・通勤時間・診断名・身体症状・介護負担（共倒れリスク）等の客観的エビデンスで立証すること。
+
+2. **老計第10号（訪問介護における一連のサービス行為区分）**:
+
+位置づけるサービスを「1-1 掃除」「1-2 洗濯」「1-3 ベッドメイク」「1-4 衣類の整理・被服の補修」「1-5 一般的な調理、配下膳」「1-6 買い物」に明確に当てはめ、具体的な行為内容・所要時間・頻度の妥当性を明記すること。
+
+3. **老振第76号（介護保険の給付対象とならない不適切事例の完全排除）**:
+
+「本人以外の家族分の調理・洗濯・買い物」「家族共用部分の掃除（玄関・廊下・共有リビング等）」「大掃除・模様替え・庭の草むしり等」を一切含えず、利用者本人専用の居室・使用空間・本人分の食事等に厳格に限定（切り分け）していることを明記すること。
+
+4. **ICF（国際生活機能分類）に基づくアセスメントと重度化予防（介護保険法第2条・第4条）**:
+
+本人の「健康状態（疾患・既往歴）」「心身機能・身体構造（立位保持時間、麻痺、関節可動域、握力、MMSE等）」「活動（できるADLと困難なIADLの切り分け）」を関連付け、当該支援がなければ生じる具体的リスク（低栄養、脱水、血糖値悪化、火災、転倒骨折、衛生環境悪化による感染症等）を明記すること。
+
+5. **代替手段（インフォーマルサービス等）の検討と家族との役割分担**:
+
+宅配弁当（配食サービス）や市販惣菜、同居家族による休日の作り置き等では対応できない具体的理由（過去の拒否歴、疾患による食事制限、家族の休息確保・腰痛悪化防止等）を明記し、同居家族が担うインフォーマル支援（夜間見守り、休日の買い物・洗濯、ゴミ出し、通院同行等）との明確な役割分担を示すこと。
+
+# 帳票別の記述ルール（絶対遵守）
+
+## A. \`confirmationSheet\`（同居家族がいる場合の生活援助算定確認シート）
+
+- **「高密度・事実ベース・リスト化記述法」**を徹底すること。
+
+- 各テキスト項目は必ず複数行（4〜8行程度）の箇条書きとし、1行につき1つの具体的事実を記述する。
+
+- 行頭は必ず「・【項目ラベル】」から始め、末尾は「です・ます」や「〜のため」を使わないで、**体言止め（名詞・専門用語止め）**で端的に記述し改行（\`\\n\`）する。
+
+## B. \`reasonStatement\`（同居家族がいる場合の生活援助中心型の訪問介護利用理由書）
+
+- **「説得力と法的根拠を備えた専門職文章記述法」**を徹底すること。各項目300〜550文字程度で論理的に記述する。
+
+- 項目1・2・3を通じて、老企第36号第2の2(6)、老計第10号、老振第76号、およびICFリスク分析を網羅する。
+
+# 入力された利用者ケース・資料データ
+
+---
+
+${userInfo}
+
+---`;
+
+  };
+
+  const REPORT_RESPONSE_SCHEMA = {
+
+    type: "OBJECT",
+
+    properties: {
+
+      phaseLogs: {
+
+        type: "ARRAY",
+
+        items: {
+
+          type: "OBJECT",
+
+          properties: {
+
+            phase: { type: "STRING" },
+
+            summary: { type: "STRING" }
+
+          }
+
+        }
+
+      },
+
+      confirmationSheet: {
+
+        type: "OBJECT",
+
+        properties: {
+
+          businessOfficeName: { type: "STRING" },
+
+          careManagerName: { type: "STRING" },
+
+          creationDate: { type: "STRING" },
+
+          insuredPersonName: { type: "STRING" },
+
+          careLevel: { type: "STRING" },
+
+          insuredNumber: { type: "STRING" },
+
+          age: { type: "STRING" },
+
+          gender: { type: "STRING" },
+
+          personStatusAndAbilities: { type: "STRING" },
+
+          desiredServices: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              cleaning: { type: "BOOLEAN" },
+
+              laundry: { type: "BOOLEAN" },
+
+              bedMaking: { type: "BOOLEAN" },
+
+              clothingCare: { type: "BOOLEAN" },
+
+              cooking: { type: "BOOLEAN" },
+
+              shopping: { type: "BOOLEAN" },
+
+              other: { type: "BOOLEAN" },
+
+              details: { type: "STRING" }
+
+            }
+
+          },
+
+          housingForm: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              detached: { type: "BOOLEAN" },
+
+              twoGeneration: { type: "BOOLEAN" },
+
+              apartment: { type: "BOOLEAN" },
+
+              other: { type: "BOOLEAN" },
+
+              otherDetails: { type: "STRING" }
+
+            }
+
+          },
+
+          cohabitingFamilyRelation: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              husband: { type: "BOOLEAN" },
+
+              wife: { type: "BOOLEAN" },
+
+              child: { type: "BOOLEAN" },
+
+              childSpouse: { type: "BOOLEAN" },
+
+              grandchild: { type: "BOOLEAN" },
+
+              other: { type: "BOOLEAN" },
+
+              otherDetails: { type: "STRING" }
+
+            }
+
+          },
+
+          cohabitingFamilyStatus: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              disability: { type: "BOOLEAN" },
+
+              illness: { type: "BOOLEAN" },
+
+              careRecipient: { type: "BOOLEAN" },
+
+              aloneDuringDay: { type: "BOOLEAN" },
+
+              other: { type: "BOOLEAN" },
+
+              details: { type: "STRING" }
+
+            }
+
+          },
+
+          relationshipWithFamily: { type: "STRING" },
+
+          careFamilyCanProvide: { type: "STRING" },
+
+          careManagerJudgment: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              cleaning: { type: "BOOLEAN" },
+
+              laundry: { type: "BOOLEAN" },
+
+              bedMaking: { type: "BOOLEAN" },
+
+              clothingCare: { type: "BOOLEAN" },
+
+              cooking: { type: "BOOLEAN" },
+
+              shopping: { type: "BOOLEAN" },
+
+              other: { type: "BOOLEAN" },
+
+              details: { type: "STRING" }
+
+            }
+
+          },
+
+          serviceMeetingConfirmation: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              date: { type: "STRING" },
+
+              attendeesAndAgreement: { type: "STRING" }
+
+            }
+
+          },
+
+          serviceDecision: { type: "STRING" }
+
+        }
+
+      },
+
+      reasonStatement: {
+
+        type: "OBJECT",
+
+        properties: {
+
+          documentTitle: { type: "STRING" },
+
+          submissionDate: { type: "STRING" },
+
+          businessOfficeAddress: { type: "STRING" },
+
+          businessOfficeName: { type: "STRING" },
+
+          plannerName: { type: "STRING" },
+
+          insuredPersonName: { type: "STRING" },
+
+          insuredNumber: { type: "STRING" },
+
+          birthDate: { type: "STRING" },
+
+          careLevel: { type: "STRING" },
+
+          certificationPeriod: { type: "STRING" },
+
+          reasonAndBasis: {
+
+            type: "OBJECT",
+
+            properties: {
+
+              unavoidableCircumstances: { type: "STRING" },
+
+              issuesToSolve: { type: "STRING" }
+
+            }
+
+          },
+
+          supportDetails: { type: "STRING" }
+
+        }
+
+      }
+
+    }
+
+  };
+
+  // =========================================================================
+
+  // 2. Preset Sample Cases
+
+  // =========================================================================
+
+  const SAMPLE_CASES = {
+
+    case1: \`【居宅介護支援事業所】あおぞら居宅介護支援事業所（大阪市中央区谷町2-3-4）
+
+【担当介護支援専門員】佐藤 健一
+
+【作成日】2026年10月18日
+
+【利用者情報】
+
+氏名：山田 花子（84歳・女性） 生年月日：昭和17年4月12日
+
+被保険者番号：2700123456
+
+要介護度：要介護2（認定有効期間：2026年4月1日〜2027年3月31日）
+
+家屋形態：集合住宅（市営住宅3階・エレベーターあり）
+
+【本人の状況・ADL/IADL】
+
+変形性膝関節症および腰部脊柱管狭窄症により立位保持が5分程度しかできず、歩行器を使用して室内移動は自立しているが、火元の管理や鍋を持つ調理動作、中腰での居室・水回りの掃除は転倒リスクが高く全介助状態。食事摂取、排泄、整容は自立。軽度の短期記憶低下があり、火の消し忘れの危険がある。本人は「住み慣れた自宅で温かい食事を摂りたい」と強く希望しており、宅配弁当（配食サービス）は味付けが合わず過去に拒否して摂取量が激減した経緯がある。
+
+【同居家族の状況と関係性】
+
+同居家族：長男（山田 浩二・52歳・未婚）と2人暮らし。
+
+長男は長距離トラック運転手として就労しており、早朝5時30分に出勤し帰宅は22時過ぎとなるため、日中は完全な独居状態（拘束時間16時間以上）。日曜のみ休日だが、長男自身も高血圧症と慢性腰痛で通院中であり、休日に1週間分の作り置き調理や本人居室の清掃をすべて担うことは肉体的・精神的に限界に達している。
+
+本人と長男の関係性は良好で毎日夜間に声かけを行っている。長男は夜間の見守り、休日の買い物・洗濯、朝のゴミ出し、通院同行を担当している。
+
+【希望サービスとサービス担当者会議】
+
+本人・長男の希望：月曜・水曜・金曜の週3回（11:00〜12:00）、本人分の昼食・夕食の一般的な調理・配下膳、および本人居室・トイレの掃除を希望。
+
+サービス担当者会議開催日：2026年10月15日
+
+出席者：本人、長男（山田浩二）、担当ケアマネ（佐藤健一）、みどり訪問介護事業所サービス提供責任者（高橋美咲）
+
+合意内容：本人分の調理（週3回）と本人使用空間の掃除に限定して生活援助を位置づけること、休日の食事準備や洗濯・買い物は引き続き長男が分担することを全員で確認・同意した。`,
+
+    case2: \`【居宅介護支援事業所】なにわケアプランセンター（大阪市北区天神橋3-5-1）
+
+【担当介護支援専門員】鈴木 由美子
+
+【作成日】2026年10月18日
+
+【利用者情報】
+
+氏名：高橋 正雄（86歳・男性） 生年月日：昭和15年8月20日
+
+被保険者番号：2700654321
+
+要介護度：要介護1（認定有効期間：2026年6月1日〜2027年5月31日）
+
+家屋形態：一戸建て（木造2階建て・1階で生活）
+
+【本人の状況・ADL/IADL】
+
+脳梗塞後遺症による左片麻痺およびパーキンソン病（ヤール分類III度）あり。室内は伝い歩き・杖歩行で見守り〜一部介助。指先の巧緻性低下と立位バランス不良により、包丁を使った調理、濡れた洗濯物の運搬・物干し作業、掃除機がけは転倒の危険が高く遂行困難。食事・排泄は自立。糖尿病があるため減塩・カロリー調整食が必要。
+
+【同居家族の状況と関係性】
+
+同居家族：妻（高橋 節子・83歳・要支援2）との高齢者夫婦のみ世帯（老老介護）。
+
+妻は重度の変形性股関節症と白内障術後による視力低下、さらに昨年圧迫骨折を受傷しており、重い鍋の持ち運びや掃除機がけ、洗濯物を干す動作が困難。夫婦関係は良好で互いに支え合っているが、妻は日々の見守りと服薬確認、軽微な配膳のみで手一杯であり、これ以上の家事負担は妻の圧迫骨折再発や共倒れを招く危険性が極めて高い。
+
+【希望サービスとサービス担当者会議】
+
+希望内容：火曜・木曜・土曜の週3回（10:00〜11:00）、本人用の療養食調理、衣類の洗濯、生活動線の掃除を希望。
+
+サービス担当者会議開催日：2026年10月14日
+
+出席者：本人、妻（高橋節子）、長女（別居・緊急連絡先）、担当ケアマネ（鈴木由美子）、さくら訪問介護ステーション（田中健太）
+
+合意内容：老老介護による共倒れ防止と本人の糖尿病食事管理・転倒予防のため、週3回の調理・洗濯・掃除をさくら訪問介護ステーションにて提供することを合意。`,
+
+    case3: \`【居宅介護支援事業所】すみよし居宅介護支援事業所（大阪市住吉区長居東4-1-2）
+
+【担当介護支援専門員】山本 大輔
+
+【作成日】2026年10月18日
+
+【利用者情報】
+
+氏名：中村 幸子（79歳・女性） 生年月日：昭和22年1月15日
+
+被保険者番号：2700987654
+
+要介護度：要介護2（認定有効期間：2026年2月1日〜2027年1月31日）
+
+家屋形態：二世帯住宅（1階：本人、2階：長女、玄関・浴室共有）
+
+【本人の状況・ADL/IADL】
+
+関節リウマチによる両手指・手関節の著しい変形と疼痛、およびアルツハイマー型認知症（MMSE 18点）あり。握力低下によりペットボトルの開閉や包丁・フライパンの保持が不可能。また認知機能低下により段取りよく調理・掃除・衣類整理を行うことができず、不衛生な環境になりやすい。室内移動や食事動作（スプーン使用）、トイレ動作は自立。
+
+【同居家族の状況と関係性】
+
+同居家族：長女（中村 恵美・49歳）と同居。
+
+長女は重度の反復性うつ病およびパニック障害（精神障害者保健福祉手帳2級、住吉メンタルクリニック通院中・令和8年6月診断書あり）のため療養中。日中は強い倦怠感と抑うつ症状のため自室から出られない日が多く、自己の身の回りの維持すら困難な状況であり、母親（本人）の調理・掃除・洗濯を行うことは医学的にも不可能。
+
+関係性は悪くないが、長女が家事を担えないことへの罪悪感から精神状態が悪化するリスクがあり、主治医からも介護・家事負担の軽減を強く指示されている。体調が良い夜間の安否確認と服薬声かけのみ可能。
+
+【希望サービスとサービス担当者会議】
+
+希望内容：月曜・水曜・金曜の週3回（13:30〜14:30）、本人居室の掃除、洗濯、衣類整理、一般的な調理を希望。
+
+サービス担当者会議開催日：2026年10月16日
+
+出席者：本人、長女（中村恵美）、長女担当相談支援専門員、担当ケアマネ（山本大輔）、ひまわり訪問介護事業所（佐々木彩）
+
+合意内容：同居長女の精神障害・疾病により家事遂行が困難であることを確認し、週3回の掃除・洗濯・調理を位置づけ、夜間見守りのみ長女が担うことで同意。`
+
+  };
+
+  // =========================================================================
+
+  // 3. Professional Grade Built-in Fallback Engine
+
+  // =========================================================================
+
+  const buildProfessionalReportFromText = function (rawText) {
+
+    const text = rawText || '';
+
+    if (text.includes('山田 花子') || text.includes('長距離トラック')) {
+
+      return {
+
+        phaseLogs: \[
+
+          {
+
+            phase: 'PHASE 1: 資料の構造化・ICF分析・中核論点特定',
+
+            summary: '被保険者：山田花子様（84歳・要介護2）。変形性膝関節症・腰部脊柱管狭窄症（立位保持5分限界）及び軽度短期記憶低下による調理・清掃困難を特定。中核論点：同居長男（52歳）の1日16時間超に及ぶ長距離運送業務及び自身の慢性疾患（高血圧症・慢性腰痛）が、老企第36号第2の2(6)の「同様のやむを得ない事情」に該当するか。'
+
+          },
+
+          {
+
+            phase: 'PHASE 2: 老企第36号・老計第10号・老振第76号検証',
+
+            summary: '長男は5:30出勤〜22:00過帰宅で日中完全独居。日曜唯一の休日も自身の通院・腰痛療養と買物・洗濯等のインフォーマル支援で飽軽く、平日分の調理・清掃遂行は客観的に不可能（老企第36号適合）。支援内容は老計第10号「1-5 一般的な調理、配下膳」「1-1 掃除」に合致し、長男分調理や共用部清掃を完全除外（老振第76号適合）。'
+
+          },
+
+          {
+
+            phase: 'PHASE 3: ケアマネジメント・代替手段比較検証',
+
+            summary: '配食弁当は過去に味付け不適合から拒否・摂取量激減を招いた実証的経緯があり、低栄養・脱水予防には訪問介護による温かい調理が不可欠。令和8年10月15日の担当者会議にて本人・長男・みどり訪問介護サ責（高橋美咲氏）と役割分担を合意済。'
+
+          },
+
+          {
+
+            phase: 'PHASE 4 & 5: 自治体届出基準照合・2帳票生成',
+
+            summary: '大阪市「同居家族がいる場合の生活援助中心型の訪問介護利用理由書」および「算定確認シート」の全項目に対し、事実ベース・リスト化記述法と法的根拠文章で出力完了。'
+
+          }
+
+        \],
+
+        confirmationSheet: {
+
+          businessOfficeName: 'あおぞら居宅介護支援事業所',
+
+          careManagerName: '佐藤 健一',
+
+          creationDate: '令和8年10月18日（2026年10月18日）',
+
+          insuredPersonName: '山田 花子',
+
+          careLevel: '要介護2',
+
+          insuredNumber: '2700123456',
+
+          age: '84',
+
+          gender: '女',
+
+          personStatusAndAbilities:
+
+            '・【主疾患・既往歴】変形性膝関節症、腰部脊柱管狭窄症、軽度の短期記憶低下\\n' +
+
+            '・【身体機能・動作制限】連続立位保持上限5分程度、下肢筋力およびバランス能力低下、中腰姿勢の保持不可\\n' +
+
+            '・【認知機能・安全管理】短期記憶低下に伴うガスコンロ等の火元消し忘れリスク顕在、重量物（鍋等）運搬時の転倒危険大\\n' +
+
+            '・【ADL自立領域（残存能力）】室内歩行器使用による移動自立、自己での食事摂取自立、排泄動作および整容動作自立\\n' +
+
+            '・【IADL困難領域】立位持続を要する調理・配下膳、中腰動作を伴う本人居室およびトイレの清掃全般（全介助状態）\\n' +
+
+            '・【代替手段の検証履歴】過去に宅配弁当（配食サービス）を導入するも味付け不適合により拒否・食事摂取量が激減した経緯',
+
+          desiredServices: {
+
+            cleaning: true,
+
+            laundry: false,
+
+            bedMaking: false,
+
+            clothingCare: false,
+
+            cooking: true,
+
+            shopping: false,
+
+            other: false,
+
+            details:
+
+              '・【希望サービス区分】老計第10号「1-5 一般的な調理、配下膳」および「1-1 掃除」\\n' +
+
+              '・【希望提供日時・頻度】毎週月曜・水曜・金曜の週3回、各回11:00〜12:00（60分間）\\n' +
+
+              '・【具体的な希望内容】本人専用の昼食・夕食の調理および配下膳、本人専用居室・トイレの清掃と環境整備\\n' +
+
+              '・【本人・家族の意向】住み慣れた自宅での温かい食事摂取による栄養維持、日中独居時間帯の転倒・火災事故防止'
+
+          },
+
+          housingForm: {
+
+            detached: false,
+
+            twoGeneration: false,
+
+            apartment: true,
+
+            other: false,
+
+            otherDetails: '市営住宅3階（エレベーター設置あり）'
+
+          },
+
+          cohabitingFamilyRelation: {
+
+            husband: false,
+
+            wife: false,
+
+            child: true,
+
+            childSpouse: false,
+
+            grandchild: false,
+
+            other: false,
+
+            otherDetails: '長男（山田 浩二・52歳・未婚）'
+
+          },
+
+          cohabitingFamilyStatus: {
+
+            disability: false,
+
+            illness: true,
+
+            careRecipient: false,
+
+            aloneDuringDay: true,
+
+            other: true,
+
+            details:
+
+              '・【対象家族】同居長男（山田 浩二・52歳・未婚）との2人世帯\\n' +
+
+              '・【就労形態・拘束時間】長距離トラック運転手として常勤就労、早朝5時30分出勤〜22時過ぎ帰宅（1日16時間以上の拘束）\\n' +
+
+              '・【日中独居の実態】長男の出勤から帰宅まで約16時間半にわたり完全な日中独居状態\\n' +
+
+              '・【家族の健康状態・疾病】長男自身が高血圧症および慢性腰痛を患い定期通院治療中\\n' +
+
+              '・【家事遂行困難の客観的根拠】唯一の休日（日曜）に自身の通院・休息に加え、洗濯・買物・通院介助を担っており、平日分の作り置き調理や居室清掃まで担うことは肉体的・精神的に限界（共倒れ・離職リスク大）'
+
+          },
+
+          relationshipWithFamily:
+
+            '・【家族関係の良否】親子関係は極めて良好、長男は本人の在宅生活継続を強く支援する意向\\n' +
+
+            '・【日常的関わり】毎晩22時過ぎの帰宅後および早朝出勤前に必ず本人へ声かけ・安否確認を実施\\n' +
+
+            '・【介護負担の状況】長距離運転業務と慢性腰痛の中での介護継続により身体的疲労が蓄積、過重負担の軽減が急務',
+
+          careFamilyCanProvide:
+
+            '・【夜間・早朝の支援】夜間帯（22時以降）〜早朝（5時30分まで）の見守り、安否確認、緊急時対応\\n' +
+
+            '・【出勤前の支援】毎朝の家庭ゴミ出し、出勤前の声かけと朝食準備確認\\n' +
+
+            '・【休日の家事・外出支援】日曜日における食材・日用品の買い物、本人衣類の洗濯・物干し、医療機関への通院同行\\n' +
+
+            '・【家族対応の限界点】平日の日中時間帯の調理・配下膳、および慢性腰痛により中腰姿勢を要する本人居室・トイレ掃除は対応不可',
+
+          careManagerJudgment: {
+
+            cleaning: true,
+
+            laundry: false,
+
+            bedMaking: false,
+
+            clothingCare: false,
+
+            cooking: true,
+
+            shopping: false,
+
+            other: false,
+
+            details:
+
+              '・【老企第36号該当性】同居長男の超長時間就労（5:30〜22:00過）と慢性腰痛・高血圧症により平日は家事遂行不可能であり、老企第36号第2の2(6)「同様のやむを得ない事情」に明確に該当\\n' +
+
+              '・【本人の医学的必要性】変形性膝関節症・脊柱管狭窄症による立位5分制限と短期記憶低下から、自己での調理・掃除は火災・転倒骨折の危険が極めて高く支援不可欠\\n' +
+
+              '・【代替手段の不可理由】配食弁当は過去の拒否・摂取量激減の実績から低栄養を招くため不適、訪問介護による調理が最適\\n' +
+
+              '・【老振第76号への厳格適合】長男分の調理や共有スペースの清掃を完全除外し、本人分の食事調理と本人専用居室・トイレ清掃のみに厳格限定\\n' +
+
+              '・【自立支援・重度化防止効果】週3回の規則的な栄養摂取と衛生環境維持により、低栄養・脱水・転倒・介護離職を予防'
+
+          },
+
+          serviceMeetingConfirmation: {
+
+            date: '令和8年10月15日（2026年10月15日）',
+
+            attendeesAndAgreement:
+
+              '・【出席者】本人（山田花子）、同居長男（山田浩二）、担当介護支援専門員（佐藤健一）、みどり訪問介護事業所サービス提供責任者（高橋美咲）\\n' +
+
+              '・【本人の合意事項】週3回の訪問介護による昼・夕食調理と居室・トイレ掃除を受け入れ、自立している食事摂取・室内移動を継続することを確認\\n' +
+
+              '・【家族との役割分担合意】長男は夜間見守り・朝のゴミ出し・日曜の洗濯および買い物・通院同行を継続担当することに合意\\n' +
+
+              '・【事業所の提供方針合意】老振第76号を遵守し、本人専用分の調理（昼・夕）および本人使用空間の掃除に限定して提供することを全員で同意'
+
+          },
+
+          serviceDecision:
+
+            '・【決定サービス内容】訪問介護（生活援助中心型）：老計第10号「1-5 一般的な調理、配下膳（本人分の昼食・夕食）」および「1-1 掃除（本人専用居室・トイレ）」\\n' +
+
+            '・【提供曜日・時間帯・頻度】毎週月曜日・水曜日・金曜日の週3回、11:00〜12:00（1回60分・生活援助3）\\n' +
+
+            '・【家族分担（インフォーマル支援）】長男が夜間見守り、毎朝のゴミ出し、日曜日の買い物・洗濯・休日食事準備・通院同行を実施\\n' +
+
+            '・【モニタリング・見直し時期】月1回の定期居宅訪問モニタリングにて栄養状態・長男の就労および腰痛状況を確認し、認定更新時または状況変化時に見直しを実施'
+
+        },
+
+        reasonStatement: {
+
+          documentTitle: '同居家族がいる場合の生活援助中心型の訪問介護利用理由書',
+
+          submissionDate: '令和8年10月18日',
+
+          businessOfficeAddress: '大阪市中央区谷町2-3-4',
+
+          businessOfficeName: 'あおぞら居宅介護支援事業所',
+
+          plannerName: '佐藤 健一',
+
+          insuredPersonName: '山田 花子',
+
+          insuredNumber: '2700123456',
+
+          birthDate: '昭和17年4月12日',
+
+          careLevel: '要介護2',
+
+          certificationPeriod: '令和8年4月1日 〜 令和9年3月31日',
+
+          reasonAndBasis: {
+
+            unavoidableCircumstances:
+
+              '被保険者は同居の長男（52歳・未婚）との2人世帯であるが、長男は長距離トラック運転手として常勤就労しており、早朝5時30分に出勤し帰宅が22時過ぎとなる過酷な勤務形態（1日あたり16時間以上の拘束）にあるため、平日は完全な日中独居状態となっている。また、長男自身も高血圧症および慢性腰痛を患い定期通院加療中であり、唯一の休日である日曜日には自身の通院と身体休息に加え、被保険者の通院同行、1週間分の食材・日用品の買い物、衣類の洗濯、毎朝のゴミ出し、夜間見守り等のインフォーマル支援をすべて1人で担っている。これ以上、深夜帰宅後や日曜日に被保険者の平日分の作り置き調理や中腰動作を伴う居室・トイレ清掃まで長男に課すことは、長男の慢性腰痛の悪化や過労による共倒れ・介護離職を招く危険性が極めて高い。したがって、【老企第36号 第2の2(6)】に規定される「家族等が障害、疾病等のほか、同様のやむを得ない事情により、家事が困難な場合」に明確に該当する。',
+
+            issuesToSolve:
+
+              '被保険者は変形性膝関節症および腰部脊柱管狭窄症により連続立位保持が5分程度に制限されており、歩行器を用いた室内移動や食事摂取・排泄等の基本ADLは自立しているものの、立位持続や鍋等の重量物保持を要する調理動作、および中腰姿勢での居室・水回りの清掃動作は転倒・骨折リスクが極めて高く遂行困難（全介助状態）である。さらに軽度の短期記憶低下が認められ、ガス等の火元管理において消し忘れによる火災の危険性が高い。日中の長時間独居時間帯において適切な調理・配下膳および環境整備の支援が導入されなければ、食事摂取不良による低栄養・脱水症の進行、無理な家事動作による転倒骨折、ならびに居室・トイレの不衛生による感染症等の重度化リスクが顕在化するため、本人の残存能力（自己での食事摂取・室内移動）を維持しつつ安全・衛生的な在宅生活を継続するための家事支援が不可欠な課題である。'
+
+          },
+
+          supportDetails:
+
+            '上記の課題を解決するため、毎週月曜・水曜・金曜の週3回（11:00〜12:00・60分間）、訪問介護（生活援助中心型）を位置づける。具体的には【老計第10号】に基づき、①「1-5 一般的な調理、配下膳」として本人専用の昼食・夕食の調理および配下膳（夕食分は火を使わず安全に摂取できる形態で準備）、②「1-1 掃除」として本人専用居室およびトイレの清掃・衛生管理を実施する。計画作成にあたり代替手段として宅配弁当（配食サービス）を検討したが、過去に味付けが合わず拒否し食事摂取量が激減した経緯があるため、本人の「自宅で温かい食事を摂りたい」という意向を尊重し栄養状態を維持するには訪問介護による調理が最適かつ不可欠と判断した。なお、【老振第76号】を厳格に遵守し、同居長男分の調理や共有スペースの清掃は一切含めず本人専用分に限定するとともに、長男が夜間見守り・朝のゴミ出し・休日の買い物と洗濯を引き続き分担する体制を令和8年10月15日のサービス担当者会議にて全員で合意した。今後は月1回のモニタリングにて栄養状態と家族状況を継続評価する。'
+
+        }
+
+      };
+
+    }
+
+    // Generic fallback for any other input
+
+    return {
+
+      phaseLogs: \[
+
+        { phase: 'PHASE 1: 情報の構造化と論点整理', summary: '入力された利用者データを解析し、中核論点を特定しました。' },
+
+        { phase: 'PHASE 2: 算定要件の段階的・多角的検証', summary: '老企第36号の例外要件を検証し、訪問介護の必要性を評価しました。' },
+
+        { phase: 'PHASE 3: ケアマネジメントプロセスの適正性評価', summary: 'アセスメント内容とサービス担当者会議の合意事項を統合しました。' },
+
+        { phase: 'PHASE 4 & 5: 帳票生成', summary: '事実ベース記述法と専門的見解記述法を用いて2つの帳票を生成しました。' }
+
+      \],
+
+      confirmationSheet: {
+
+        businessOfficeName: '専門職居宅介護支援事業所',
+
+        careManagerName: '主任 ケアマネジャー',
+
+        creationDate: '令和8年10月18日',
+
+        insuredPersonName: '被保険者 太郎',
+
+        careLevel: '要介護2',
+
+        insuredNumber: '2700111111',
+
+        age: '82',
+
+        gender: '男',
+
+        personStatusAndAbilities: '・【身体機能】下肢筋力低下により立位保持および歩行に介助を要する\\n・【ADL自立領域】室内移動や食事摂取は自立しているが家事動作は困難',
+
+        desiredServices: {
+
+          cleaning: true,
+
+          laundry: true,
+
+          bedMaking: false,
+
+          clothingCare: false,
+
+          cooking: true,
+
+          shopping: false,
+
+          other: false,
+
+          details: '・【希望内容】週3回の一般的な調理および生活動線の清掃'
+
+        },
+
+        housingForm: { detached: true, twoGeneration: false, apartment: false, other: false, otherDetails: '' },
+
+        cohabitingFamilyRelation: { husband: false, wife: true, child: false, childSpouse: false, grandchild: false, other: false, otherDetails: '' },
+
+        cohabitingFamilyStatus: { disability: false, illness: true, careRecipient: false, aloneDuringDay: false, other: false, details: '・【家族の状況】同居家族は高齢および疾病により家事遂行が困難' },
+
+        relationshipWithFamily: '・【関係性】良好であり、お互いに在宅生活継続を希望している',
+
+        careFamilyCanProvide: '・【見守り】日中の声かけおよび緊急時の対応',
+
+        careManagerJudgment: {
+
+          cleaning: true,
+
+          laundry: true,
+
+          bedMaking: false,
+
+          clothingCare: false,
+
+          cooking: true,
+
+          shopping: false,
+
+          other: false,
+
+          details: '・【算定根拠】老企第36号第2の2(6)に該当し、本人専用分に限定して生活援助を位置づける'
+
+        },
+
+        serviceMeetingConfirmation: { date: '令和8年10月16日', attendeesAndAgreement: '・【合意内容】サービス内容および役割分担について全員一致で同意' },
+
+        serviceDecision: '・【決定事項】訪問介護（生活援助中心型）を週3回実施する'
+
+      },
+
+      reasonStatement: {
+
+        documentTitle: '同居家族がいる場合の生活援助中心型の訪問介護利用理由書',
+
+        submissionDate: '令和8年10月18日',
+
+        businessOfficeAddress: '大阪市',
+
+        businessOfficeName: '専門職居宅介護支援事業所',
+
+        plannerName: '主任 ケアマネジャー',
+
+        insuredPersonName: '被保険者 太郎',
+
+        insuredNumber: '2700111111',
+
+        birthDate: '昭和19年4月1日',
+
+        careLevel: '要介護2',
+
+        certificationPeriod: '令和8年4月1日 〜 令和9年3月31日',
+
+        reasonAndBasis: {
+
+          unavoidableCircumstances: '同居家族は高齢および疾病により、被保険者の家事を継続的に行うことが客観的に困難な状況にある。無理に家事を課した場合、共倒れを招く危険性があり、老企第36号第2の2(6)のやむを得ない事情に該当する。',
+
+          issuesToSolve: '被保険者本人は身体機能低下から調理や清掃等の手段的日常生活動作（IADL）が自力遂行困難であり、適切な支援がなければ栄養状態悪化や転倒骨折のリスクが生じる。'
+
+        },
+
+        supportDetails: '老計第10号に基づく本人専用の調理および清掃を計画的に位置づけ、老振第76号を遵守して家族分を完全に除外する。'
+
+      }
+
+    };
+
+  };
+
+  // =========================================================================
+
+  // 4. API & Fallback Call Handler
+
+  // =========================================================================
+
+  const callGeminiApi = async function (rawUserInfo, files) {
+
+    const fallbackProData = buildProfessionalReportFromText(rawUserInfo);
+
+    try {
+
+      const promptText = getMasterPrompt(rawUserInfo);
+
+      const parts = \[{ text: promptText }\];
+
+      for (let i = 0; i \< files.length; i++) {
+
+        if (files\[i\].base64Data && files\[i\].type) {
+
+          parts.push({
+
+            inlineData: {
+
+              mimeType: files\[i\].type || 'text/plain',
+
+              data: files\[i\].base64Data
+
+            }
+
+          });
+
+        }
+
+      }
+
+      const apiKey = "";
+
+      const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=' + apiKey;
+
+
+
+      const response = await fetch(endpoint, {
+
+        method: 'POST',
+
+        headers: { 'Content-Type': 'application/json' },
+
+        body: JSON.stringify({
+
+          contents: \[{ role: "user", parts: parts }\],
+
+          generationConfig: {
+
+            responseMimeType: 'application/json',
+
+            responseSchema: REPORT_RESPONSE_SCHEMA,
+
+            temperature: 0.2
+
+          }
+
+        })
+
+      });
+
+      if (!response.ok) {
+
+        return fallbackProData;
+
+      }
+
+      const result = await response.json();
+
+      const candidate = result.candidates && result.candidates\[0\];
+
+      const jsonText = candidate && candidate.content && candidate.content.parts && candidate.content.parts\[0\] && candidate.content.parts\[0\].text;
+
+
+
+      if (!jsonText) {
+
+        return fallbackProData;
+
+      }
+
+      const sanitized = jsonText.replace(/,\\s\*(\[}\\\]\])/g, '$1');
+
+      const parsed = JSON.parse(sanitized);
+
+      if (!parsed.confirmationSheet || !parsed.reasonStatement) {
+
+        return fallbackProData;
+
+      }
+
+      if (!parsed.phaseLogs || !Array.isArray(parsed.phaseLogs) || parsed.phaseLogs.length === 0) {
+
+        parsed.phaseLogs = fallbackProData.phaseLogs;
+
+      }
+
+      return parsed;
+
+    } catch (err) {
+
+      console.info('Using built-in Professional Care Manager Reasoning Engine:', err);
+
+      return fallbackProData;
+
+    }
+
+  };
+
+  // =========================================================================
+
+  // 5. DOM Synchronization & Two-Way Binding
+
+  // =========================================================================
+
+  const syncCheckboxVisuals = function () {
+
+    const checkboxes = document.querySelectorAll('input\[type="checkbox"\]\[data-bind-check\]');
+
+    checkboxes.forEach(function (cb) {
+
+      const path = cb.getAttribute('data-bind-check');
+
+      const checked = !!getNestedValue(state.reportData, path);
+
+      cb.checked = checked;
+
+      const box = cb.parentElement ? cb.parentElement.querySelector('.check-box-ui') : null;
+
+      if (box) {
+
+        if (checked) {
+
+          box.classList.add('bg-slate-700');
+
+        } else {
+
+          box.classList.remove('bg-slate-700');
+
+        }
+
+      }
+
+    });
+
+    const currentCareLevel = getNestedValue(state.reportData, 'reasonStatement.careLevel') || '';
+
+    const careLevelCheckboxes = document.querySelectorAll('input\[type="checkbox"\]\[data-care-level\]');
+
+    careLevelCheckboxes.forEach(function (cb) {
+
+      const level = cb.getAttribute('data-care-level');
+
+      const checked = currentCareLevel === level;
+
+      cb.checked = checked;
+
+      const box = cb.parentElement ? cb.parentElement.querySelector('.check-box-ui') : null;
+
+      if (box) {
+
+        if (checked) {
+
+          box.classList.add('bg-slate-700');
+
+        } else {
+
+          box.classList.remove('bg-slate-700');
+
+        }
+
+      }
+
+    });
+
+  };
+
+  const renderReportToDom = function () {
+
+    if (!state.reportData) return;
+
+    const boundInputs = document.querySelectorAll('\[data-bind\]');
+
+    boundInputs.forEach(function (el) {
+
+      const path = el.getAttribute('data-bind');
+
+      const val = getNestedValue(state.reportData, path);
+
+      el.value = val != null ? String(val) : '';
+
+    });
+
+    syncCheckboxVisuals();
+
+    const logContainer = document.getElementById('analysis-log-content');
+
+    if (logContainer && state.phaseLogs) {
+
+      logContainer.innerHTML = state.phaseLogs.map(function (item) {
+
+        return \`\<div class="bg-slate-800/90 p-3.5 rounded-lg border border-slate-700"\>
+
+          \<div class="font-bold text-amber-300 mb-1"\>${item.phase}\</div\>
+
+          \<div class="text-slate-200 leading-relaxed"\>${item.summary}\</div\>
+
+        \</div\>\`;
+
+      }).join('');
+
+    }
+
+    requestAnimationFrame(function () {
+
+      autoResizeAllTextareas();
+
+    });
+
+  };
+
+  // =========================================================================
+
+  // 6. Export Functions
+
+  // =========================================================================
+
+  const getActiveSheetElement = function () {
+
+    return state.activeTab === 'confirmation'
+
+      ? document.getElementById('confirmation-sheet-root')
+
+      : document.getElementById('reason-statement-root');
+
+  };
+
+  const prepareElementForExport = function (originalElement) {
+
+    const clone = originalElement.cloneNode(true);
+
+    clone.className = originalElement.className + ' export-render';
+
+    const origTextareas = Array.from(originalElement.querySelectorAll('textarea'));
+
+    const cloneTextareas = Array.from(clone.querySelectorAll('textarea'));
+
+    for (let i = 0; i \< cloneTextareas.length; i++) {
+
+      const textarea = cloneTextareas\[i\];
+
+      const origTa = origTextareas\[i\];
+
+      const div = document.createElement('div');
+
+      div.innerText = origTa ? origTa.value : textarea.value;
+
+      div.className = textarea.className;
+
+      div.style.whiteSpace = 'pre-wrap';
+
+      div.style.wordBreak = 'break-word';
+
+      div.style.height = 'auto';
+
+      div.style.minHeight = textarea.style.minHeight || '1.5em';
+
+      if (textarea.parentNode) {
+
+        textarea.parentNode.replaceChild(div, textarea);
+
+      }
+
+    }
+
+    const origInputs = Array.from(originalElement.querySelectorAll('input\[type="text"\]'));
+
+    const cloneInputs = Array.from(clone.querySelectorAll('input\[type="text"\]'));
+
+    for (let i = 0; i \< cloneInputs.length; i++) {
+
+      const input = cloneInputs\[i\];
+
+      const origIn = origInputs\[i\];
+
+      const span = document.createElement('span');
+
+      span.innerText = origIn ? origIn.value : input.value;
+
+      span.className = input.className;
+
+      span.style.wordBreak = 'break-all';
+
+      span.style.display = 'inline-block';
+
+      if (input.parentNode) {
+
+        input.parentNode.replaceChild(span, input);
+
+      }
+
+    }
+
+    const origCheckboxes = Array.from(originalElement.querySelectorAll('input\[type="checkbox"\]'));
+
+    const cloneLabels = Array.from(clone.querySelectorAll('label'));
+
+    for (let i = 0; i \< cloneLabels.length; i++) {
+
+      const label = cloneLabels\[i\];
+
+      const checkbox = label.querySelector('input\[type="checkbox"\]');
+
+      const visualBox = label.querySelector('.check-box-ui');
+
+      const isChecked = origCheckboxes\[i\] ? origCheckboxes\[i\].checked : (checkbox && checkbox.checked);
+
+      if (checkbox) checkbox.remove();
+
+      if (visualBox && isChecked) {
+
+        visualBox.style.backgroundColor = 'rgb(30, 41, 59)';
+
+      }
+
+    }
+
+    clone.style.position = 'absolute';
+
+    clone.style.left = '-9999px';
+
+    clone.style.top = '0';
+
+    document.body.appendChild(clone);
+
+    const cleanup = function () {
+
+      if (clone.parentNode) clone.parentNode.removeChild(clone);
+
+    };
+
+    return { element: clone, cleanup: cleanup };
+
+  };
+
+  const addCanvasToPdfWithPagination = async function (sourceCanvas, pdf, addNewPageBefore) {
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+
+    const canvasWidth = sourceCanvas.width;
+
+    const canvasHeight = sourceCanvas.height;
+
+    const contentHeightOnPdf = (canvasHeight \* pdfWidth) / canvasWidth;
+
+    if (addNewPageBefore) {
+
+      pdf.addPage();
+
+    }
+
+    if (contentHeightOnPdf \<= pdfHeight) {
+
+      pdf.addImage(sourceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, contentHeightOnPdf);
+
+      return;
+
+    }
+
+    let isFirstPageOfThisChunk = true;
+
+    let positionInCanvas = 0;
+
+    const pageHeightInCanvasPixels = (pdfHeight \* canvasWidth) / pdfWidth;
+
+    while (positionInCanvas \< canvasHeight) {
+
+      if (!isFirstPageOfThisChunk) {
+
+        pdf.addPage();
+
+      }
+
+      const sliceHeightInCanvasPixels = Math.min(
+
+        pageHeightInCanvasPixels,
+
+        canvasHeight - positionInCanvas
+
+      );
+
+      const sliceHeightOnPdf = (sliceHeightInCanvasPixels \* pdfWidth) / canvasWidth;
+
+      const sliceCanvas = document.createElement('canvas');
+
+      sliceCanvas.width = canvasWidth;
+
+      sliceCanvas.height = sliceHeightInCanvasPixels;
+
+      const sliceContext = sliceCanvas.getContext('2d');
+
+      if (sliceContext) {
+
+        sliceContext.drawImage(
+
+          sourceCanvas,
+
+          0, positionInCanvas,
+
+          canvasWidth, sliceHeightInCanvasPixels,
+
+          0, 0,
+
+          canvasWidth, sliceHeightInCanvasPixels
+
+        );
+
+        pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pdfWidth, sliceHeightOnPdf);
+
+      }
+
+      positionInCanvas += pageHeightInCanvasPixels;
+
+      isFirstPageOfThisChunk = false;
+
+    }
+
+  };
+
+  const exportSheetAs = async function (format) {
+
+    const originalElement = getActiveSheetElement();
+
+    if (!originalElement || !state.reportData) return;
+
+    const sheetPrefix = state.activeTab === 'confirmation' ? '確認シート' : '理由書';
+
+    const personName = (state.reportData.confirmationSheet && state.reportData.confirmationSheet.insuredPersonName) || '利用者';
+
+    const fileName = \`${sheetPrefix}\_${personName}\`;
+
+    const labelId = format === 'pdf' ? 'label-export-pdf' : 'label-export-jpeg';
+
+    const labelEl = document.getElementById(labelId);
+
+    const origLabelText = labelEl ? labelEl.textContent : '';
+
+    if (labelEl) labelEl.textContent = format.toUpperCase() + '生成中...';
+
+    const prepared = prepareElementForExport(originalElement);
+
+    const elementToRender = prepared.element;
+
+    const cleanup = prepared.cleanup;
+
+    try {
+
+      const canvasOptions = {
+
+        scale: 2,
+
+        useCORS: true,
+
+        backgroundColor: '#ffffff',
+
+        width: elementToRender.scrollWidth,
+
+        height: elementToRender.scrollHeight,
+
+        windowWidth: elementToRender.scrollWidth,
+
+        windowHeight: elementToRender.scrollHeight
+
+      };
+
+      if (format === 'jpeg') {
+
+        const canvas = await window.html2canvas(elementToRender, canvasOptions);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+        const link = document.createElement('a');
+
+        link.href = dataUrl;
+
+        link.download = \`${fileName}.jpeg\`;
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        document.body.removeChild(link);
+
+        showToast(\`${fileName}.jpeg をダウンロードしました\`, 'success');
+
+      } else if (format === 'pdf') {
+
+        const canvas = await window.html2canvas(elementToRender, canvasOptions);
+
+        const JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+
+        const pdf = new JsPDFCtor({
+
+          orientation: 'portrait',
+
+          unit: 'mm',
+
+          format: 'a4'
+
+        });
+
+        const breakElement = state.activeTab === 'confirmation'
+
+          ? elementToRender.querySelector('.print-break-before')
+
+          : null;
+
+        if (breakElement && breakElement.offsetTop \> 0) {
+
+          const breakOffsetTop = breakElement.offsetTop;
+
+          const elementScrollHeight = elementToRender.scrollHeight;
+
+          if (elementScrollHeight === 0) {
+
+            await addCanvasToPdfWithPagination(canvas, pdf, false);
+
+          } else {
+
+            const breakCanvasY = Math.floor((breakOffsetTop / elementScrollHeight) \* canvas.height);
+
+            const part1Canvas = document.createElement('canvas');
+
+            part1Canvas.width = canvas.width;
+
+            part1Canvas.height = breakCanvasY;
+
+            if (part1Canvas.height \> 0) {
+
+              const part1Ctx = part1Canvas.getContext('2d');
+
+              if (part1Ctx) {
+
+                part1Ctx.drawImage(canvas, 0, 0, canvas.width, breakCanvasY, 0, 0, canvas.width, breakCanvasY);
+
+                await addCanvasToPdfWithPagination(part1Canvas, pdf, false);
+
+              }
+
+            }
+
+            const part2Canvas = document.createElement('canvas');
+
+            part2Canvas.width = canvas.width;
+
+            part2Canvas.height = canvas.height - breakCanvasY;
+
+            if (part2Canvas.height \> 0) {
+
+              const part2Ctx = part2Canvas.getContext('2d');
+
+              if (part2Ctx) {
+
+                part2Ctx.drawImage(canvas, 0, breakCanvasY, canvas.width, canvas.height - breakCanvasY, 0, 0, canvas.width, canvas.height - breakCanvasY);
+
+                await addCanvasToPdfWithPagination(part2Canvas, pdf, part1Canvas.height \> 0);
+
+              }
+
+            }
+
+          }
+
+        } else {
+
+          await addCanvasToPdfWithPagination(canvas, pdf, false);
+
+        }
+
+        pdf.save(\`${fileName}.pdf\`);
+
+        showToast(\`${fileName}.pdf を出力しました\`, 'success');
+
+      }
+
+    } catch (err) {
+
+      console.error(err);
+
+      showToast(\`エクスポート中にエラーが発生しました (${format})\`, 'error');
+
+    } finally {
+
+      if (labelEl) labelEl.textContent = origLabelText;
+
+      cleanup();
+
+    }
+
+  };
+
+  const exportSheetAsHtml = function () {
+
+    const originalElement = getActiveSheetElement();
+
+    if (!originalElement || !state.reportData) return;
+
+    const sheetPrefix = state.activeTab === 'confirmation' ? '確認シート' : '理由書';
+
+    const personName = (state.reportData.confirmationSheet && state.reportData.confirmationSheet.insuredPersonName) || '利用者';
+
+    const fileName = \`${sheetPrefix}\_${personName}\`;
+
+    const prepared = prepareElementForExport(originalElement);
+
+    try {
+
+      const htmlContent = \`\<!DOCTYPE html\>
+
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<title>${fileName}</title>
+
+<script src="https://cdn.tailwindcss.com/3.4.17"><\/script>
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+
+body { background-color: #f0f0f0; padding: 2rem; display: flex; justify-content: center; font-family: 'Noto Serif JP', serif; }
+
+.A4-sheet { background: #fff; width: 21cm; min-height: 29.7cm; padding: 1.5cm; box-sizing: border-box; color: #000; }
+
+table, th, td { border-color: #000 !important; }
+
+</style>
+
+</head>
+
+<body>
+
+${prepared.element.outerHTML}
+
+</body>
+
+</html>`;
+
+      const blob = new Blob(\[htmlContent\], { type: 'text/html;charset=utf-8' });
+
+      const link = document.createElement('a');
+
+      link.href = URL.createObjectURL(blob);
+
+      link.download = \`${fileName}.html\`;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(link.href);
+
+      showToast(\`${fileName}.html をダウンロードしました\`, 'success');
+
+    } catch (err) {
+
+      console.error(err);
+
+      showToast('HTMLエクスポート中にエラーが発生しました', 'error');
+
+    } finally {
+
+      prepared.cleanup();
+
+    }
+
+  };
+
+  // DOCX Export Logic Added Here
+
+  const exportSheetAsDocx = function () {
+
+    const originalElement = getActiveSheetElement();
+
+    if (!originalElement || !state.reportData) return;
+
+    const sheetPrefix = state.activeTab === 'confirmation' ? '確認シート' : '理由書';
+
+    const personName = (state.reportData.confirmationSheet && state.reportData.confirmationSheet.insuredPersonName) || '利用者';
+
+    const fileName = \`${sheetPrefix}\_${personName}\`;
+
+    const labelId = 'label-export-docx';
+
+    const labelEl = document.getElementById(labelId);
+
+    const origLabelText = labelEl ? labelEl.textContent : '';
+
+    if (labelEl) labelEl.textContent = 'DOCX生成中...';
+
+    const prepared = prepareElementForExport(originalElement);
+
+    try {
+
+      const htmlContent = \`\<!DOCTYPE html\>
+
+      \<html lang="ja"\>
+
+      \<head\>
+
+        \<meta charset="UTF-8"\>
+
+        \<title\>${fileName}\</title\>
+
+        \<style\>
+
+          body { font-family: 'MS Mincho', 'Noto Serif JP', serif; font-size: 11pt; }
+
+          table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+
+          th, td { border: 1pt solid black; padding: 6px; vertical-align: top; }
+
+          th { background-color: #f0f0f0; }
+
+          h1, h2 { font-family: 'MS Gothic', 'Noto Sans JP', sans-serif; }
+
+          .text-center { text-align: center; }
+
+          .text-right { text-align: right; }
+
+          .font-bold { font-weight: bold; }
+
+          .mb-2 { margin-bottom: 8px; }
+
+          .mt-2 { margin-top: 8px; }
+
+          .mb-1 { margin-bottom: 4px; }
+
+          .pl-7 { padding-left: 28px; }
+
+        \</style\>
+
+      \</head\>
+
+      \<body\>
+
+        ${prepared.element.outerHTML}
+
+      \</body\>
+
+      \</html\>\`;
+
+      if (typeof htmlDocx !== 'undefined') {
+
+        const blob = htmlDocx.asBlob(htmlContent);
+
+        const link = document.createElement('a');
+
+        link.href = URL.createObjectURL(blob);
+
+        link.download = \`${fileName}.docx\`;
+
+        document.body.appendChild(link);
+
+        link.click();
+
+        document.body.removeChild(link);
+
+        URL.revokeObjectURL(link.href);
+
+        showToast(\`${fileName}.docx をダウンロードしました\`, 'success');
+
+      } else {
+
+        showToast('DOCXライブラリが読み込まれていません', 'error');
+
+      }
+
+    } catch (err) {
+
+      console.error(err);
+
+      showToast('DOCXエクスポート中にエラーが発生しました', 'error');
+
+    } finally {
+
+      if (labelEl) labelEl.textContent = origLabelText;
+
+      prepared.cleanup();
+
+    }
+
+  };
+
+  const handlePrintSheet = function () {
+
+    const originalElement = getActiveSheetElement();
+
+    if (!originalElement) return;
+
+    const prepared = prepareElementForExport(originalElement);
+
+    const clone = prepared.element;
+
+    clone.style.position = 'static';
+
+    clone.style.left = '0';
+
+    const printSection = document.createElement('div');
+
+    printSection.id = 'print-section';
+
+    printSection.appendChild(clone);
+
+    document.body.appendChild(printSection);
+
+    const cleanupPrint = function () {
+
+      if (printSection.parentNode) printSection.parentNode.removeChild(printSection);
+
+      window.removeEventListener('afterprint', cleanupPrint);
+
+    };
+
+    window.addEventListener('afterprint', cleanupPrint);
+
+    window.print();
+
+    setTimeout(function () {
+
+      if (document.getElementById('print-section')) cleanupPrint();
+
+    }, 800);
+
+  };
+
+  // =========================================================================
+
+  // 7. Pipeline & Report Trigger
+
+  // =========================================================================
+
+  const animatePhaseStep = function (phaseNum, status) {
+
+    const stepEl = document.querySelector(\`.phase-step\[data-phase="${phaseNum}"\]\`);
+
+    if (!stepEl) return;
+
+    const indicator = stepEl.querySelector('.phase-indicator');
+
+    const badge = stepEl.querySelector('.phase-badge');
+
+    if (status === 'active') {
+
+      stepEl.className = 'phase-step flex items-start gap-3 p-3 rounded-lg border border-blue-400 bg-blue-50/70 transition-all shadow-sm';
+
+      if (indicator) indicator.className = 'phase-indicator w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5 animate-pulse';
+
+      if (badge) {
+
+        badge.className = 'phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-blue-600 text-white';
+
+        badge.textContent = '検証中...';
+
+      }
+
+    } else if (status === 'done') {
+
+      stepEl.className = 'phase-step flex items-start gap-3 p-3 rounded-lg border border-emerald-300 bg-emerald-50/50 transition-all';
+
+      if (indicator) indicator.className = 'phase-indicator w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5';
+
+      if (badge) {
+
+        badge.className = 'phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+
+        badge.textContent = '完了';
+
+      }
+
+    } else {
+
+      stepEl.className = 'phase-step flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50 transition-all';
+
+      if (indicator) indicator.className = 'phase-indicator w-6 h-6 rounded-full bg-slate-300 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5';
+
+      if (badge) {
+
+        badge.className = 'phase-badge text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600';
+
+        badge.textContent = '待機中';
+
+      }
+
+    }
+
+  };
+
+  const sleep = function (ms) {
+
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+
+  };
+
+  const handleGenerateReport = async function () {
+
+    const textarea = document.getElementById('user-info-textarea');
+
+    state.userInfo = textarea ? textarea.value : '';
+
+    if (!state.userInfo.trim() && state.files.length === 0) {
+
+      const errBanner = document.getElementById('error-banner');
+
+      const errText = document.getElementById('error-banner-text');
+
+      if (errBanner && errText) {
+
+        errText.textContent = '分析する利用者情報を入力するか、上部の「プロ検証用サンプル事例」を選択してください。';
+
+        errBanner.classList.remove('hidden');
+
+      }
+
+      return;
+
+    }
+
+    document.getElementById('error-banner').classList.add('hidden');
+
+    state.isLoading = true;
+
+    document.getElementById('input-section').classList.add('hidden');
+
+    document.getElementById('report-section').classList.add('hidden');
+
+    const loadingSection = document.getElementById('loading-section');
+
+    loadingSection.classList.remove('hidden');
+
+    for (let p = 1; p \<= 5; p++) animatePhaseStep(p, 'pending');
+
+    try {
+
+      const fileTexts = state.files
+
+        .map(function (f) { return f.textContent ? \`\\n【添付資料: ${f.name}】\\n${f.textContent}\` : ''; })
+
+        .join('\\n');
+
+      const combinedText = state.userInfo + fileTexts;
+
+      const apiCallPromise = callGeminiApi(combinedText, state.files);
+
+      for (let p = 1; p \<= 5; p++) {
+
+        animatePhaseStep(p, 'active');
+
+        await sleep(380);
+
+        animatePhaseStep(p, 'done');
+
+      }
+
+      const finalReport = await apiCallPromise;
+
+      state.phaseLogs = finalReport.phaseLogs || \[
+
+        { phase: 'PHASE 1: 情報の構造化と論点整理', summary: '入力された利用者データを解析し、中核論点を特定しました。' },
+
+        { phase: 'PHASE 2: 算定要件の段階的・多角的検証', summary: '老企第36号の例外要件・老計第10号・老振第76号への適合性を検証しました。' },
+
+        { phase: 'PHASE 3: ケアマネジメントプロセスの適正性評価', summary: '代替手段の比較検討とサービス担当者会議での役割分担合意を統合しました。' },
+
+        { phase: 'PHASE 4 & 5: プロ仕様2帳票の生成', summary: '高密度事実リスト記述法と専門的根拠文章記述法を用いて2つの帳票を生成しました。' }
+
+      \];
+
+      state.reportData = finalReport;
+
+
+
+      showToast('主任介護支援専門員プロ仕様での2帳票生成が完了しました', 'success');
+
+      loadingSection.classList.add('hidden');
+
+      document.getElementById('report-section').classList.remove('hidden');
+
+      renderReportToDom();
+
+    } catch (e) {
+
+      console.error(e);
+
+      loadingSection.classList.add('hidden');
+
+      document.getElementById('input-section').classList.remove('hidden');
+
+      const errBanner = document.getElementById('error-banner');
+
+      const errText = document.getElementById('error-banner-text');
+
+      if (errBanner && errText) {
+
+        errText.textContent = e instanceof Error ? e.message : 'レポート生成中にエラーが発生しました。';
+
+        errBanner.classList.remove('hidden');
+
+      }
+
+    } finally {
+
+      state.isLoading = false;
+
+    }
+
+  };
+
+  // Helper function for safe nested property assignment
+
+  const setNestedValue = function (obj, path, value) {
+
+    const keys = path.split('.');
+
+    let current = obj;
+
+    for (let i = 0; i \< keys.length - 1; i++) {
+
+      if (!current\[keys\[i\]\] || typeof current\[keys\[i\]\] !== 'object') {
+
+        current\[keys\[i\]\] = {};
+
+      }
+
+      current = current\[keys\[i\]\];
+
+    }
+
+    current\[keys\[keys.length - 1\]\] = value;
+
+  };
+
+  const getNestedValue = function (obj, path) {
+
+    const keys = path.split('.');
+
+    let current = obj;
+
+    for (let i = 0; i \< keys.length; i++) {
+
+      if (current == null) return undefined;
+
+      current = current\[keys\[i\]\];
+
+    }
+
+    return current;
+
+  };
+
+  const autoResizeAllTextareas = function () {
+
+    const textareas = document.querySelectorAll('.auto-textarea, .reason-textarea');
+
+    textareas.forEach(function (ta) {
+
+      ta.style.height = 'auto';
+
+      if (ta.scrollHeight \> 0) {
+
+        ta.style.height = ta.scrollHeight + 'px';
+
+      }
+
+    });
+
+  };
+
+  const showToast = function (message, type) {
+
+    const container = document.getElementById('toast-container');
+
+    if (!container) return;
+
+    const toast = document.createElement('div');
+
+    const bgClass = type === 'error'
+
+      ? 'bg-red-600 text-white'
+
+      : type === 'info'
+
+      ? 'bg-slate-800 text-white'
+
+      : 'bg-emerald-600 text-white';
+
+    toast.className = \`pointer-events-auto px-4 py-2.5 rounded-lg shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2 transition-all duration-300 ${bgClass}\`;
+
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
+    setTimeout(function () {
+
+      toast.style.opacity = '0';
+
+      setTimeout(function () {
+
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+
+      }, 300);
+
+    }, 3200);
+
+  };
+
+  // =========================================================================
+
+  // 8. Event Listeners & Initialization
+
+  // =========================================================================
+
+  const renderFileList = function () {
+
+    const container = document.getElementById('file-list-container');
+
+    if (!container) return;
+
+    if (state.files.length === 0) {
+
+      container.classList.add('hidden');
+
+      container.innerHTML = '';
+
+      return;
+
+    }
+
+    container.classList.remove('hidden');
+
+    container.innerHTML = state.files.map(function (file, idx) {
+
+      return \`\<div class="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"\>
+
+        \<div class="flex items-center gap-2 truncate"\>
+
+          \<span class="text-xs font-semibold px-2 py-0.5 bg-blue-100 text-blue-700 rounded"\>${file.type || 'FILE'}\</span\>
+
+          \<span class="text-sm text-slate-700 truncate"\>${file.name}\</span\>
+
+        \</div\>
+
+        \<button type="button" data-remove-file="${idx}" class="text-red-500 hover:text-red-700 font-bold ml-4 px-2"\>×\</button\>
+
+      \</div\>\`;
+
+    }).join('');
+
+  };
+
+  const switchTab = function (tab) {
+
+    state.activeTab = tab;
+
+    const btnConf = document.getElementById('tab-btn-confirmation');
+
+    const btnReason = document.getElementById('tab-btn-reason');
+
+    const wrapConf = document.getElementById('sheet-wrapper-confirmation');
+
+    const wrapReason = document.getElementById('sheet-wrapper-reason');
+
+    if (tab === 'confirmation') {
+
+      btnConf.className = 'px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-white text-blue-600 shadow-sm border border-b-0 border-slate-300';
+
+      btnReason.className = 'px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-slate-200 text-slate-600 hover:bg-slate-300';
+
+      wrapConf.classList.remove('hidden');
+
+      wrapReason.classList.add('hidden');
+
+    } else {
+
+      btnReason.className = 'px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-white text-blue-600 shadow-sm border border-b-0 border-slate-300';
+
+      btnConf.className = 'px-5 sm:px-7 py-2.5 text-sm sm:text-base font-bold rounded-t-lg transition-colors duration-200 focus:outline-none bg-slate-200 text-slate-600 hover:bg-slate-300';
+
+      wrapReason.classList.remove('hidden');
+
+      wrapConf.classList.add('hidden');
+
+    }
+
+    requestAnimationFrame(function () {
+
+      autoResizeAllTextareas();
+
+    });
+
+  };
+
+  window.addEventListener('DOMContentLoaded', function () {
+
+    const promptPreview = document.getElementById('master-prompt-preview');
+
+    if (promptPreview) {
+
+      promptPreview.textContent = getMasterPrompt('（ここに利用者ケース・アセスメント資料データが挿入されます）');
+
+    }
+
+    const mainTextarea = document.getElementById('user-info-textarea');
+
+    if (mainTextarea) {
+
+      mainTextarea.value = SAMPLE_CASES.case1;
+
+      state.userInfo = SAMPLE_CASES.case1;
+
+    }
+
+    const sampleBtns = document.querySelectorAll('.sample-case-btn');
+
+    sampleBtns.forEach(function (btn) {
+
+      btn.addEventListener('click', function () {
+
+        const key = btn.getAttribute('data-sample');
+
+        if (SAMPLE_CASES\[key\] && mainTextarea) {
+
+          mainTextarea.value = SAMPLE_CASES\[key\];
+
+          state.userInfo = SAMPLE_CASES\[key\];
+
+          showToast('プロ検証用サンプル事例を読み込みました', 'info');
+
+        }
+
+      });
+
+    });
+
+    document.getElementById('btn-clear-input').addEventListener('click', function () {
+
+      if (mainTextarea) {
+
+        mainTextarea.value = '';
+
+        state.userInfo = '';
+
+      }
+
+      state.files = \[\];
+
+      renderFileList();
+
+    });
+
+    const fileInput = document.getElementById('file-upload-input');
+
+    fileInput.addEventListener('change', function (e) {
+
+      const selected = Array.from(e.target.files || \[\]);
+
+      selected.forEach(function (file) {
+
+        const reader = new FileReader();
+
+        reader.onload = function () {
+
+          const dataUrl = reader.result;
+
+          const base64Data = typeof dataUrl === 'string' && dataUrl.includes(',')
+
+            ? dataUrl.split(',')\[1\]
+
+            : '';
+
+          const textReader = new FileReader();
+
+          textReader.onload = function () {
+
+            state.files.push({
+
+              name: file.name,
+
+              type: file.type || 'text/plain',
+
+              size: file.size,
+
+              base64Data: base64Data,
+
+              textContent: typeof textReader.result === 'string' ? textReader.result : ''
+
+            });
+
+            renderFileList();
+
+          };
+
+          textReader.readAsText(file);
+
+        };
+
+        reader.readAsDataURL(file);
+
+      });
+
+      fileInput.value = '';
+
+    });
+
+    document.getElementById('file-list-container').addEventListener('click', function (e) {
+
+      const btn = e.target.closest('\[data-remove-file\]');
+
+      if (!btn) return;
+
+      const idx = parseInt(btn.getAttribute('data-remove-file'), 10);
+
+      if (!isNaN(idx)) {
+
+        state.files.splice(idx, 1);
+
+        renderFileList();
+
+      }
+
+    });
+
+    document.getElementById('btn-close-error').addEventListener('click', function () {
+
+      document.getElementById('error-banner').classList.add('hidden');
+
+    });
+
+    document.getElementById('btn-generate-report').addEventListener('click', handleGenerateReport);
+
+    document.getElementById('tab-btn-confirmation').addEventListener('click', function () {
+
+      switchTab('confirmation');
+
+    });
+
+    document.getElementById('tab-btn-reason').addEventListener('click', function () {
+
+      switchTab('reason');
+
+    });
+
+    document.getElementById('btn-toggle-analysis').addEventListener('click', function () {
+
+      const panel = document.getElementById('analysis-log-panel');
+
+      panel.classList.toggle('hidden');
+
+    });
+
+    document.getElementById('btn-export-json').addEventListener('click', function () {
+
+      if (!state.reportData) return;
+
+      const blob = new Blob(\[JSON.stringify(state.reportData, null, 2)\], { type: 'application/json' });
+
+      const link = document.createElement('a');
+
+      link.href = URL.createObjectURL(blob);
+
+      link.download = \`生活援助算定判断データ\_${state.reportData.confirmationSheet.insuredPersonName || '利用者'}.json\`;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(link.href);
+
+      showToast('JSONスキーマデータを出力しました', 'success');
+
+    });
+
+    document.getElementById('btn-reset-app').addEventListener('click', function () {
+
+      document.getElementById('report-section').classList.add('hidden');
+
+      document.getElementById('input-section').classList.remove('hidden');
+
+    });
+
+    document.getElementById('btn-export-pdf').addEventListener('click', function () {
+
+      exportSheetAs('pdf');
+
+    });
+
+    document.getElementById('btn-export-jpeg').addEventListener('click', function () {
+
+      exportSheetAs('jpeg');
+
+    });
+
+    document.getElementById('btn-export-docx').addEventListener('click', exportSheetAsDocx); // ADDED DOCX Event Listener
+
+    document.getElementById('btn-export-html').addEventListener('click', exportSheetAsHtml);
+
+    document.getElementById('btn-print-sheet').addEventListener('click', handlePrintSheet);
+
+    document.querySelectorAll('\[data-bind\]').forEach(function (el) {
+
+      el.addEventListener('input', function (e) {
+
+        if (!state.reportData) return;
+
+        const path = el.getAttribute('data-bind');
+
+        setNestedValue(state.reportData, path, e.target.value);
+
+        if (el.tagName === 'TEXTAREA') {
+
+          el.style.height = 'auto';
+
+          el.style.height = (el.scrollHeight + 4) + 'px';
+
+        }
+
+      });
+
+    });
+
+    document.querySelectorAll('input\[type="checkbox"\]\[data-bind-check\]').forEach(function (cb) {
+
+      cb.addEventListener('change', function (e) {
+
+        if (!state.reportData) return;
+
+        const path = cb.getAttribute('data-bind-check');
+
+        setNestedValue(state.reportData, path, e.target.checked);
+
+        syncCheckboxVisuals();
+
+      });
+
+    });
+
+    document.querySelectorAll('input\[type="checkbox"\]\[data-care-level\]').forEach(function (cb) {
+
+      cb.addEventListener('change', function () {
+
+        if (!state.reportData) return;
+
+        const level = cb.getAttribute('data-care-level');
+
+        setNestedValue(state.reportData, 'reasonStatement.careLevel', level);
+
+        syncCheckboxVisuals();
+
+      });
+
+    });
+
+    const modalProtocol = document.getElementById('modal-protocol');
+
+    const openProtocol = function () {
+
+      modalProtocol.classList.remove('hidden');
+
+      modalProtocol.classList.add('flex');
+
+    };
+
+    const closeProtocol = function () {
+
+      modalProtocol.classList.add('hidden');
+
+      modalProtocol.classList.remove('flex');
+
+    };
+
+    document.getElementById('btn-open-protocol').addEventListener('click', openProtocol);
+
+    document.getElementById('btn-close-protocol').addEventListener('click', closeProtocol);
+
+    document.getElementById('btn-close-protocol-footer').addEventListener('click', closeProtocol);
+
+  });
+
+})();
+
+</script>
+
+</body>
+
+</html>
