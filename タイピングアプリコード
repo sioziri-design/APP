@@ -1,0 +1,1357 @@
+/**
+ * TypingForge ― 変換後の日本語文字で判定するタイピング検定アプリ（Gemini Canvas用・単一ファイル）
+ *
+ * ・APIキー不要：AI機能（教材生成／PDF文字起こし／整形／コーチ）はCanvas上のGemini Flashを使用
+ * ・正誤は「IMEで確定した日本語の文字」を編集距離で照合（ローマ字は不使用）
+ * ・正誤・速度・ランク・スコアの計算にAIは関与しない（すべて決定的な数式）
+ * ・デフォルト教材なし（走れメロス等は含まない）
+ */
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+
+/* ============================================================================
+   ENGINE : 判定エンジン（UI非依存の純粋関数。単体テスト済み）
+   ----------------------------------------------------------------------------
+   ■ 判定の大原則
+   1. 正誤は「IMEで変換・確定された日本語の文字」を 1文字（書記素）単位で照合する。
+      ローマ字の打鍵列は一切使わない。
+   2. 照合は編集距離(Levenshtein)による最適アライメント。誤字/脱字/余字を厳密に分類。
+   3. 速度は「正解文字数 ÷ 計測時間」。誤字入力は速度に加算されない（正味速度）。
+   4. 確定前（変換中）の文字は計測に含めない。Backspaceによる訂正は時間として反映される。
+   5. 表示するすべての数値は実測値から算出。固定値・乱数・見せかけの指標は一切使わない。
+   ========================================================================== */
+
+const _SEG = (typeof Intl !== 'undefined' && Intl.Segmenter) ? new Intl.Segmenter('ja', { granularity: 'grapheme' }) : null;
+const toG = (s) => (!s ? [] : _SEG ? Array.from(_SEG.segment(s), (x) => x.segment) : Array.from(s));
+
+const MATCH_LEVELS = {
+  strict:   { label: '厳密',     desc: '改行のみ無視。空白・全角/半角・記号を含め完全一致を要求' },
+  standard: { label: '標準',     desc: '空白・改行の差を無視。それ以外（全角/半角・記号・漢字）は完全一致を要求' },
+  lenient:  { label: '寛容',     desc: '標準に加え、全角/半角・互換文字の違い（例: １と1、ｱとア）を同一視' },
+};
+
+function normalizeForJudge(s, level = 'standard') {
+  let t = (s ?? '').normalize('NFC').replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\r\n?/g, '\n');
+  if (level === 'lenient') t = t.normalize('NFKC');
+  t = level === 'strict' ? t.replace(/\n/g, '') : t.replace(/[\s\u3000]+/g, '');
+  return t;
+}
+
+/* ---- 文字種 ---- */
+const RE_HIRA = /[\u3041-\u3096\u309D\u309E]/;
+const RE_KATA = /[\u30A1-\u30FA\u30FC\u30FD\u30FE\uFF66-\uFF9F]/;
+const RE_KANJI = /[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u3007\uF900-\uFAFF]/;
+const RE_ALNUM = /[A-Za-z0-9\uFF21-\uFF3A\uFF41-\uFF5A\uFF10-\uFF19]/;
+const CLASS_LABEL = { hira: 'ひらがな', kata: 'カタカナ', kanji: '漢字', alnum: '英数字', sym: '句読点・記号' };
+function classOf(ch) {
+  if (RE_HIRA.test(ch)) return 'hira';
+  if (RE_KATA.test(ch)) return 'kata';
+  if (RE_KANJI.test(ch)) return 'kanji';
+  if (RE_ALNUM.test(ch)) return 'alnum';
+  return 'sym';
+}
+const toHira = (s) => s.replace(/[\u30A1-\u30F6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
+/* ---- 最適アライメント ---- */
+function alignGraphemes(tArr, iArr, partial) {
+  const m = tArr.length, n = iArr.length, W = n + 1;
+  const dp = new Uint32Array((m + 1) * W);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 0; i <= m; i++) dp[i * W] = i;
+  for (let i = 1; i <= m; i++) {
+    const ti = tArr[i - 1];
+    for (let j = 1; j <= n; j++) {
+      const c = ti === iArr[j - 1] ? 0 : 1;
+      const a = dp[(i - 1) * W + j - 1] + c, b = dp[(i - 1) * W + j] + 1, d = dp[i * W + j - 1] + 1;
+      dp[i * W + j] = a < b ? (a < d ? a : d) : (b < d ? b : d);
+    }
+  }
+  // 途中までの入力(partial)は「未到達の末尾」を評価対象から外す（最小距離となる到達点を採用）
+  let end = m;
+  if (partial) {
+    let best = Infinity;
+    for (let i = 0; i <= m; i++) { const v = dp[i * W + n]; if (v <= best) { best = v; end = i; } }
+  }
+  const segs = [];
+  let i = end, j = n;
+  while (i > 0 || j > 0) {
+    const cur = dp[i * W + j];
+    if (i > 0 && j > 0 && tArr[i - 1] === iArr[j - 1] && cur === dp[(i - 1) * W + j - 1]) {
+      segs.push({ k: 'ok', a: tArr[i - 1], b: iArr[j - 1], ti: i - 1 }); i--; j--;
+    } else if (i > 0 && j > 0 && cur === dp[(i - 1) * W + j - 1] + 1) {
+      segs.push({ k: 'sub', a: tArr[i - 1], b: iArr[j - 1], ti: i - 1 }); i--; j--;
+    } else if (i > 0 && cur === dp[(i - 1) * W + j] + 1) {
+      segs.push({ k: 'miss', a: tArr[i - 1], b: '', ti: i - 1 }); i--;
+    } else {
+      segs.push({ k: 'extra', a: '', b: iArr[j - 1], ti: i }); j--;
+    }
+  }
+  segs.reverse();
+  let ok = 0, sub = 0, miss = 0, extra = 0;
+  for (const s of segs) { if (s.k === 'ok') ok++; else if (s.k === 'sub') sub++; else if (s.k === 'miss') miss++; else extra++; }
+  return { segs, evalLen: end, inputLen: n, ok, sub, miss, extra, dist: sub + miss + extra };
+}
+
+/* ---- 誤りの種類を判定（実際の文字の組み合わせから機械的に分類） ---- */
+function classifyBlock(t, i) {
+  if (!t) return '余字（余分な文字）';
+  if (!i) return '脱字（入力漏れ）';
+  if (t.normalize('NFKC') === i.normalize('NFKC')) return '全角・半角の違い';
+  const tc = toG(t).map(classOf), ic = toG(i).map(classOf);
+  const all = (arr, c) => arr.every((x) => x === c);
+  if (all(tc, 'sym') && all(ic, 'sym')) return '句読点・記号の違い';
+  const kana = (x) => x === 'hira' || x === 'kata';
+  if (tc.includes('kanji') && ic.every(kana)) return '未変換（かなのまま）';
+  if (tc.includes('kanji') && ic.includes('kanji')) return '異なる漢字（誤変換・同音異義）';
+  if (tc.every(kana) && ic.includes('kanji')) return '過剰変換（かなを漢字に）';
+  if (tc.every(kana) && ic.every(kana)) return toHira(t) === toHira(i) ? 'ひらがな/カタカナの違い' : 'かなの打ち間違い';
+  if (tc.includes('alnum') || ic.includes('alnum')) return '英数字の違い';
+  return '文字の違い';
+}
+
+function buildBlocks(segs, tArr) {
+  const blocks = [];
+  let cur = null;
+  const flush = () => {
+    if (!cur) return;
+    cur.kind = classifyBlock(cur.target, cur.input);
+    cur.before = tArr.slice(Math.max(0, cur.at - 4), cur.at).join('');
+    const after = cur.at + toG(cur.target).length;
+    cur.after = tArr.slice(after, after + 4).join('');
+    blocks.push(cur); cur = null;
+  };
+  for (const s of segs) {
+    if (s.k === 'ok') { flush(); continue; }
+    if (!cur) cur = { at: s.ti, target: '', input: '' };
+    cur.target += s.a; cur.input += s.b;
+  }
+  flush();
+  return blocks;
+}
+
+/* ---- 日本語ローマ字換算（推定。他アプリとの比較目安としてのみ表示） ---- */
+function estimateKeys(str) {
+  let k = 0;
+  for (const ch of toG(str)) {
+    const c = classOf(ch);
+    k += c === 'hira' ? 1.9 : c === 'kata' ? (ch === 'ー' ? 1 : 2.0) : c === 'kanji' ? 3.9 : 1;
+  }
+  return k;
+}
+const REF_KEYS_PER_CHAR = 2.6;
+
+/* ---- ランク体系（正味速度 = 変換後の正解文字数 / 分） ---- */
+const LADDER = [
+  { id: 'D',   min: 0,   name: '入門' },
+  { id: 'C',   min: 30,  name: '初級' },
+  { id: 'B',   min: 55,  name: '中級' },
+  { id: 'A',   min: 80,  name: '上級' },
+  { id: 'A+',  min: 105, name: '上級＋' },
+  { id: 'S',   min: 130, name: 'エキスパート' },
+  { id: 'SS',  min: 160, name: 'マスター' },
+  { id: 'SSS', min: 200, name: 'グランドマスター' },
+  { id: 'GOD', min: 250, name: 'レジェンド' },
+];
+const PROFILES = {
+  friendly: { label: 'やさしめ', scale: 0.8,  desc: '基準を20%緩和。一般的なタイピングアプリのランク感に近い設定' },
+  standard: { label: '標準',     scale: 1.0,  desc: '基準そのまま（既定）' },
+  strict:   { label: '厳格',     scale: 1.25, desc: '基準を25%引き上げ。競技・検定向け' },
+};
+function ladderFor(profileId) {
+  const sc = (PROFILES[profileId] || PROFILES.standard).scale;
+  return LADDER.map((r) => ({ ...r, min: Math.round(r.min * sc) }));
+}
+function rankFromCpm(cpm, profileId) {
+  const lad = ladderFor(profileId);
+  let idx = 0;
+  for (let i = 0; i < lad.length; i++) if (cpm >= lad[i].min) idx = i;
+  const next = lad[idx + 1] || null;
+  return { rank: lad[idx], idx, next, toNext: next ? Math.max(0, Math.ceil(next.min - cpm)) : 0, ladder: lad };
+}
+function accuracyGrade(acc) {
+  if (acc >= 99.5) return { id: 'S', label: '完璧' };
+  if (acc >= 98.5) return { id: 'A', label: '極めて正確' };
+  if (acc >= 97) return { id: 'B', label: '正確' };
+  if (acc >= 94) return { id: 'C', label: '要注意' };
+  if (acc >= 90) return { id: 'D', label: 'ミス多め' };
+  return { id: 'E', label: '精度不足' };
+}
+
+/* ---- ペース系列（実測の確定文字数の推移から算出） ---- */
+function paceSeries(events, totalSec, win) {
+  const out = [];
+  const nAt = (t) => { let v = 0; for (const e of events) { if (e.t <= t) v = e.n; else break; } return v; };
+  const K = Math.floor(totalSec / win);
+  for (let k = 0; k < K; k++) {
+    const d = Math.max(0, nAt((k + 1) * win) - nAt(k * win));
+    out.push({ t: (k + 1) * win, cpm: Math.round((d * 60) / win) });
+  }
+  return out;
+}
+function stabilityOf(events, totalSec) {
+  const w = paceSeries(events, totalSec, 20).slice(1); // 立ち上がり区間を除外
+  if (w.length < 3) return null;
+  const v = w.map((x) => x.cpm), mean = v.reduce((a, b) => a + b, 0) / v.length;
+  if (mean <= 0) return null;
+  const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) ** 2, 0) / v.length);
+  const cv = sd / mean;
+  return { score: Math.max(0, Math.min(100, Math.round((1 - cv) * 100))), cv: Number(cv.toFixed(2)), windows: w.length };
+}
+function staminaOf(events, totalSec) {
+  const w = paceSeries(events, totalSec, 20);
+  if (w.length < 6) return null;
+  const third = Math.floor(w.length / 3);
+  const avg = (a) => a.reduce((s, x) => s + x.cpm, 0) / a.length;
+  const first = avg(w.slice(0, third)), last = avg(w.slice(-third));
+  if (first <= 0) return null;
+  return { retention: Math.min(120, Math.round((last / first) * 100)), first: Math.round(first), last: Math.round(last) };
+}
+
+/* ---- セッション評価（結果画面・履歴の唯一の算出元） ---- */
+function evaluateSession({ sections, level = 'standard', timing, profile = 'standard', mode = 'free', events = [], laps = [] }) {
+  const per = [];
+  let T = { evalLen: 0, inputLen: 0, ok: 0, sub: 0, miss: 0, extra: 0, dist: 0, denom: 0 };
+  const cls = {}; Object.keys(CLASS_LABEL).forEach((k) => (cls[k] = { total: 0, ok: 0 }));
+  const blocks = [];
+  let okKeys = 0;
+  sections.forEach((s, idx) => {
+    const tArr = toG(normalizeForJudge(s.target, level)), iArr = toG(normalizeForJudge(s.input, level));
+    const r = alignGraphemes(tArr, iArr, !s.full);
+    const denom = Math.max(r.evalLen, r.inputLen);
+    T.evalLen += r.evalLen; T.inputLen += r.inputLen; T.ok += r.ok; T.sub += r.sub; T.miss += r.miss; T.extra += r.extra; T.dist += r.dist; T.denom += denom;
+    for (const sg of r.segs) {
+      if (sg.k !== 'extra') { const c = classOf(sg.a); cls[c].total++; if (sg.k === 'ok') { cls[c].ok++; okKeys += estimateKeys(sg.a); } }
+    }
+    const bl = buildBlocks(r.segs, tArr).map((b) => ({ ...b, section: idx + 1 }));
+    blocks.push(...bl);
+    const lap = laps[idx];
+    per.push({
+      index: idx + 1, evalLen: r.evalLen, inputLen: r.inputLen, ok: r.ok, sub: r.sub, miss: r.miss, extra: r.extra,
+      accuracy: denom > 0 ? Number(((1 - r.dist / denom) * 100).toFixed(1)) : 0,
+      sec: lap ? Number(lap.sec.toFixed(1)) : null,
+      cpm: lap && lap.sec > 1 ? Math.round((r.ok * 60) / lap.sec) : null,
+      full: !!s.full, segs: r.segs,
+    });
+  });
+  const accuracy = T.denom > 0 ? Math.max(0, Number(((1 - T.dist / T.denom) * 100).toFixed(1))) : 0;
+  const sec = Math.max(timing.sec, 0.001), min = sec / 60;
+  const netCpm = Math.round(T.ok / min), grossCpm = Math.round(T.inputLen / min);
+  const eqKeysPerSec = Number((okKeys / sec).toFixed(1));
+  const rk = rankFromCpm(netCpm, profile);
+  const stability = stabilityOf(events, sec), stamina = staminaOf(events, sec);
+
+  const speedPts = Math.min(600, Math.round((600 * netCpm) / ladderFor(profile)[LADDER.length - 1].min));
+  const accPts = Math.round(300 * Math.max(0, Math.min(1, (accuracy - 85) / 15)));
+  const stabPts = stability ? Math.round(stability.score) : null;
+  const score = stabPts === null ? Math.round(((speedPts + accPts) * 1000) / 900) : speedPts + accPts + stabPts;
+
+  const reasons = [];
+  if (T.ok < 80) reasons.push('評価対象の正解文字数が80字未満');
+  if (sec < 30) reasons.push('計測時間が30秒未満');
+  if (accuracy < 85) reasons.push('正確率が85%未満（速度の信頼性が不足）');
+  const limit = timing.limitSec || 0;
+  if (limit > 0 && timing.finishedBy !== 'timeup') reasons.push('制限時間の終了前に終了（教材を打ち切った／途中終了）');
+  if (timing.finishedBy === 'sudden') reasons.push('即死モードのため途中で終了');
+  const certified = reasons.length === 0;
+
+  const typeCounts = {};
+  blocks.forEach((b) => { typeCounts[b.kind] = (typeCounts[b.kind] || 0) + 1; });
+  const pairCounts = {};
+  blocks.forEach((b) => { if (b.target && b.input) { const k = b.target + '→' + b.input; pairCounts[k] = (pairCounts[k] || 0) + 1; } });
+
+  return {
+    totals: { ...T, accuracy, correct: T.ok },
+    speed: { netCpm, grossCpm, eqKeysPerSec, refKeysPerChar: REF_KEYS_PER_CHAR },
+    timing: { ...timing, sec: Number(sec.toFixed(1)) },
+    rank: { id: rk.rank.id, name: rk.rank.name, idx: rk.idx, next: rk.next, toNext: rk.toNext, ladder: rk.ladder, profile },
+    accGrade: accuracyGrade(accuracy),
+    stability, stamina,
+    score: { total: Math.min(1000, score), speedPts, accPts, stabPts },
+    reliability: { certified, reasons },
+    classes: Object.fromEntries(Object.entries(cls).map(([k, v]) => [k, { ...v, acc: v.total ? Number(((v.ok / v.total) * 100).toFixed(1)) : null }])),
+    blocks, typeCounts, pairCounts,
+    sections: per,
+    pace: paceSeries(events, sec, 10),
+    mode, level,
+  };
+}
+
+/* ---- 教材の区間分割 ---- */
+function sanitizeMaterialText(raw) {
+  return (raw || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/^\s*(#{1,6}|[*\-+>]|\d+[.)])\s+/gm, '')
+    .replace(/[*_`~]{1,3}/g, '')
+    .replace(/[“”]/g, '"').replace(/[‘’]/g, "'")
+    .replace(/[ \t\u3000]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+function splitIntoSections(text, target = 200) {
+  const paras = sanitizeMaterialText(text).split('\n').map((s) => s.trim()).filter(Boolean);
+  const sentences = [];
+  for (const p of paras) {
+    const arr = p.match(/[^。！？!?]+[。！？!?]*|[。！？!?]+/g) || [p];
+    for (let s of arr) {
+      s = s.trim(); if (!s) continue;
+      const hard = Math.round(target * 1.4);
+      while (toG(s).length > hard) {
+        const g = toG(s); let cut = -1;
+        for (let k = Math.min(g.length - 1, hard); k > target * 0.5; k--) { if ('、，,'.includes(g[k])) { cut = k + 1; break; } }
+        if (cut < 0) cut = hard;
+        sentences.push(g.slice(0, cut).join('')); s = g.slice(cut).join('');
+      }
+      if (s) sentences.push(s);
+    }
+  }
+  const out = []; let cur = '';
+  for (const s of sentences) {
+    const len = toG(cur).length, add = toG(s).length;
+    if (cur && len >= target * 0.8 && len + add > target * 1.25) { out.push(cur); cur = s; }
+    else cur += s;
+  }
+  if (cur) {
+    if (out.length && toG(cur).length < target * 0.4 && toG(out[out.length - 1] + cur).length <= target * 1.6) out[out.length - 1] += cur;
+    else out.push(cur);
+  }
+  return out;
+}
+/* ===== ENGINE END ===== */
+
+/* ============================================================================
+   AI LAYER : Gemini Flash（Canvas実行環境がキーを自動付与。ユーザーのAPIキーは不要）
+   ========================================================================== */
+const apiKey = ''; // ← Canvasが実行時に注入します。空のままにしてください。
+const GEMINI_MODELS = ['gemini-2.5-flash-preview-09-2025', 'gemini-2.5-flash'];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function callGemini({ parts, system, schema, temperature = 0.8, maxTokens = 8192, signal }) {
+  const base = {
+    contents: [{ role: 'user', parts }],
+    systemInstruction: { parts: [{ text: system }] },
+  };
+  let lastErr = null;
+  for (const model of GEMINI_MODELS) {
+    for (const useThinkingCfg of [true, false]) {
+      const gen = { temperature, maxOutputTokens: maxTokens };
+      if (schema) { gen.responseMimeType = 'application/json'; gen.responseSchema = schema; }
+      if (useThinkingCfg) gen.thinkingConfig = { thinkingBudget: 0 };
+      const body = JSON.stringify({ ...base, generationConfig: gen });
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      let retryable = true;
+      for (let attempt = 0; attempt < 4 && retryable; attempt++) {
+        try {
+          const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+          if (res.ok) {
+            const data = await res.json();
+            const txt = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+            if (!txt) throw new Error('AIから空の応答が返りました');
+            if (!schema) return txt;
+            const clean = txt.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+            return JSON.parse(clean);
+          }
+          if (res.status === 429 || res.status >= 500) { lastErr = new Error(`AI混雑中 (${res.status})`); await sleep(1000 * 2 ** attempt); continue; }
+          lastErr = new Error(`AIエラー (${res.status})`); retryable = false;
+        } catch (e) {
+          if (e?.name === 'AbortError') throw e;
+          lastErr = e; if (e instanceof SyntaxError) { retryable = attempt < 1; } else if (attempt < 3) await sleep(1000 * 2 ** attempt); else retryable = false;
+        }
+      }
+      if (!useThinkingCfg) break;
+    }
+  }
+  throw lastErr || new Error('AIに接続できませんでした');
+}
+
+const S = (d) => ({ type: 'STRING', description: d });
+const SARR = (d) => ({ type: 'ARRAY', description: d, items: { type: 'STRING' } });
+
+/* ---- 教材生成 ---- */
+async function aiGenerateMaterial({ theme, genre, difficulty, chars, style, focus, signal }) {
+  const system = [
+    'あなたは日本語タイピング練習用の教材を書くプロの文章作家です。',
+    '次の規則を厳守してください。',
+    '1. 完全オリジナルの文章のみ。既存の小説・歌詞・記事・著作物の引用や模倣はしない。',
+    '2. 見出し・箇条書き・マークダウン・絵文字・英語の注釈を使わない。普通の文章段落だけで構成する。',
+    '3. 句読点は全角の「、」「。」。括弧は「」のみ。数字は半角アラビア数字か漢数字。全角英数字は使わない。',
+    '4. IMEで入力して自然に変換できる語を使う。極端に珍しい漢字・外字・旧字体・難読固有名詞は避ける。',
+    '5. 事実関係が怪しい断定は避け、一般的に正しい内容か、明らかな創作として書く。',
+    '6. 段落は改行1つで区切る。空行は入れない。',
+  ].join('\n');
+  const prompt = [
+    `テーマ: ${theme || '自由（読み物として面白いもの）'}`,
+    `ジャンル: ${genre}`,
+    `漢字の密度・難易度: ${difficulty}`,
+    `文体: ${style}`,
+    `目標文字数: 約${chars}文字（前後10%以内）`,
+    focus ? `次の語句・文字を文章中に自然に複数回含めること（苦手克服用）: ${focus}` : '',
+    'title には内容を表す短い題名を、text には本文のみを入れてください。',
+  ].filter(Boolean).join('\n');
+  const out = await callGemini({
+    system, parts: [{ text: prompt }], temperature: 0.9, signal,
+    maxTokens: Math.min(16000, chars * 3 + 1024),
+    schema: { type: 'OBJECT', properties: { title: S('題名（20文字以内）'), text: S('本文') }, required: ['title', 'text'] },
+  });
+  return { title: String(out.title || '無題').slice(0, 40), text: sanitizeMaterialText(out.text) };
+}
+
+/* ---- PDF／画像からの文字起こし（Geminiのマルチモーダル） ---- */
+async function aiExtractFromFile({ base64, mimeType, signal }) {
+  const system = 'あなたは正確な文字起こし担当です。与えられた文書の本文を、要約・翻訳・補足・修正をせず原文のまま書き起こします。ページ番号・ヘッダー・フッター・図表キャプションなど本文でない要素は除きます。改行は段落の区切りのみ残し、行末の折り返しによる改行は取り除いてください。';
+  const out = await callGemini({
+    system, temperature: 0, signal, maxTokens: 16000,
+    parts: [{ text: '本文を書き起こしてください。title には文書の題名（なければ内容を表す短い題）を入れてください。' }, { inlineData: { mimeType, data: base64 } }],
+    schema: { type: 'OBJECT', properties: { title: S('題名'), text: S('本文（原文のまま）') }, required: ['title', 'text'] },
+  });
+  return { title: String(out.title || '取り込み教材').slice(0, 40), text: sanitizeMaterialText(out.text) };
+}
+
+/* ---- 貼り付けテキストの整形（内容は変えない） ---- */
+async function aiCleanText({ text, signal }) {
+  const system = 'あなたは文章整形ツールです。内容・語句・表記を一切変えず、PDFやWebからの貼り付けで生じた不要な改行、ページ番号、脚注番号、連続空白、文字化け的な記号だけを取り除きます。要約・言い換え・追記は禁止。段落の区切りは改行1つで残します。';
+  const out = await callGemini({
+    system, temperature: 0, signal, maxTokens: 16000,
+    parts: [{ text }],
+    schema: { type: 'OBJECT', properties: { text: S('整形後の本文') }, required: ['text'] },
+  });
+  return sanitizeMaterialText(out.text);
+}
+
+/* ---- AIコーチ（判定には一切影響しない。実測値のみを根拠にする） ---- */
+async function aiCoach({ result, signal }) {
+  const system = [
+    'あなたは日本語タイピングの専属コーチです。',
+    '渡された実測データだけを根拠に分析してください。データにないことは断定せず「可能性」と明示すること。',
+    'あなたの所見は採点・ランクに一切影響しません。数値を作り直したり、ランクを評価し直したりしないこと。',
+    'このアプリはローマ字ではなく、IMEで変換・確定された日本語の文字で正誤判定しています。運指・キー配列の話はデータがないので推測で書かない。',
+    '口調は丁寧で前向き。具体的で、今日から実行できる練習を提示する。',
+  ].join('\n');
+  const topBlocks = result.blocks.slice(0, 25).map((b) => ({ 区間: b.section, 正解: b.target || '（なし）', 入力: b.input || '（なし）', 種別: b.kind, 前後: `${b.before}[ ]${b.after}` }));
+  const data = {
+    正味速度_文字毎分: result.speed.netCpm, 粗速度_文字毎分: result.speed.grossCpm,
+    正確率: result.totals.accuracy, 誤字: result.totals.sub, 脱字: result.totals.miss, 余字: result.totals.extra,
+    評価対象文字数: result.totals.evalLen, 計測秒: result.timing.sec,
+    速度ランク: result.rank.id, 次ランクまで文字毎分: result.rank.toNext,
+    文字種別正確率: Object.fromEntries(Object.entries(result.classes).map(([k, v]) => [CLASS_LABEL[k], v.acc])),
+    ペース安定度: result.stability, 持続率: result.stamina,
+    誤りの種別件数: result.typeCounts, 誤りの詳細: topBlocks,
+  };
+  return callGemini({
+    system, temperature: 0.6, signal, maxTokens: 4096,
+    parts: [{ text: '次の測定結果を分析し、コーチングしてください。\n' + JSON.stringify(data) }],
+    schema: {
+      type: 'OBJECT',
+      properties: {
+        headline: S('今回の総評を一文で'),
+        summary: S('全体の分析（3〜5文）'),
+        strengths: SARR('良かった点（2〜3個）'),
+        weaknesses: { type: 'ARRAY', description: '課題（1〜3個）', items: { type: 'OBJECT', properties: { title: S('課題名'), detail: S('実測データに基づく説明'), cause: S('考えられる原因（可能性として）') }, required: ['title', 'detail'] } },
+        drills: { type: 'ARRAY', description: '練習メニュー（2〜3個）', items: { type: 'OBJECT', properties: { name: S('メニュー名'), how: S('具体的なやり方'), minutes: { type: 'NUMBER', description: '所要分' } }, required: ['name', 'how'] } },
+        nextGoal: S('次回の具体的な数値目標'),
+      },
+      required: ['headline', 'summary', 'strengths', 'weaknesses', 'drills', 'nextGoal'],
+    },
+  });
+}
+
+/* ---- 安全なストレージ（Canvasでlocalstorageが使えない場合はメモリで代替） ---- */
+const memStore = {};
+const store = {
+  get(k, d) { try { const v = window.localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return k in memStore ? memStore[k] : d; } },
+  set(k, v) { try { window.localStorage.setItem(k, JSON.stringify(v)); } catch { memStore[k] = v; } },
+  del(k) { try { window.localStorage.removeItem(k); } catch { delete memStore[k]; } },
+};
+
+/* ============================================================================
+   UI : 共通部品
+   ========================================================================== */
+const CSS = `
+.tf-root{--bg:#0d1116;--p1:#141a21;--p2:#1a212a;--p3:#222b36;--ln:#2a3340;--tx:#e8e5dc;--mu:#8e98a6;--ai:#6fb7c9;--gd:#d8b45e;--sh:#e8583f;--gr:#7fc08a;--paper:#f1ede0;--ink:#1b1b19;
+  background:var(--bg);color:var(--tx);min-height:100vh;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo",system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+.tf-root *{box-sizing:border-box}
+.tf-serif{font-family:"Yu Mincho","YuMincho","Hiragino Mincho ProN","Noto Serif JP","MS PMincho",serif}
+.tf-mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Consolas,monospace;font-variant-numeric:tabular-nums}
+.tf-card{background:var(--p1);border:1px solid var(--ln);border-radius:14px}
+.tf-card2{background:var(--p2);border:1px solid var(--ln);border-radius:10px}
+.tf-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.5rem .9rem;border-radius:9px;border:1px solid var(--ln);background:var(--p2);color:var(--tx);font-size:.85rem;cursor:pointer;transition:background .15s,border-color .15s}
+.tf-btn:hover{background:var(--p3);border-color:#3a4554}
+.tf-btn:disabled{opacity:.45;cursor:not-allowed}
+.tf-btn:focus-visible,.tf-chip:focus-visible,.tf-input:focus-visible{outline:2px solid var(--ai);outline-offset:2px}
+.tf-btn-main{background:var(--gd);border-color:var(--gd);color:#1c1708;font-weight:700}
+.tf-btn-main:hover{background:#e6c470;border-color:#e6c470}
+.tf-btn-ai{background:rgba(111,183,201,.12);border-color:rgba(111,183,201,.45);color:#bfe3ec}
+.tf-btn-ai:hover{background:rgba(111,183,201,.2)}
+.tf-chip{padding:.35rem .7rem;border-radius:8px;border:1px solid var(--ln);background:transparent;color:var(--mu);font-size:.8rem;cursor:pointer}
+.tf-chip:hover{color:var(--tx);border-color:#3a4554}
+.tf-chip[aria-pressed=true]{background:rgba(216,180,94,.14);border-color:var(--gd);color:var(--gd);font-weight:600}
+.tf-input{width:100%;background:var(--bg);border:1px solid var(--ln);color:var(--tx);border-radius:9px;padding:.55rem .75rem;font-size:.9rem}
+.tf-input::placeholder{color:#5d6876}
+.c-mu{color:var(--mu)}.c-ai{color:var(--ai)}.c-gd{color:var(--gd)}.c-sh{color:var(--sh)}.c-gr{color:var(--gr)}
+.tf-h{font-size:.78rem;color:var(--mu);letter-spacing:.04em}
+.tf-paper{background:var(--paper);color:var(--ink);border-radius:12px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 18px 40px -18px rgba(0,0,0,.7)}
+.tf-ruled{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--lh,2.4rem) - 1px),rgba(120,100,60,.16) calc(var(--lh,2.4rem) - 1px),rgba(120,100,60,.16) var(--lh,2.4rem))}
+.tf-todo{color:var(--ink)}.tf-done{color:#9a9a8c}
+.tf-bad{color:var(--sh);background:rgba(232,88,63,.16);border-bottom:2px solid var(--sh);border-radius:2px}
+.tf-skip{color:var(--sh);opacity:.75;text-decoration:underline wavy rgba(232,88,63,.8);text-underline-offset:4px}
+.tf-cur{border-bottom:3px solid #b8892a;background:rgba(216,180,94,.28);border-radius:2px}
+.tf-bar{height:6px;border-radius:99px;background:var(--p3);overflow:hidden}
+.tf-bar>i{display:block;height:100%;border-radius:99px;transition:width .35s}
+.tf-scroll::-webkit-scrollbar{width:8px;height:8px}.tf-scroll::-webkit-scrollbar-thumb{background:#2e3846;border-radius:8px}
+@keyframes tf-pop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
+.tf-pop{animation:tf-pop .35s cubic-bezier(.2,.8,.2,1) both}
+@keyframes tf-spin{to{transform:rotate(360deg)}}.tf-spin{animation:tf-spin 1s linear infinite}
+@media (prefers-reduced-motion:reduce){.tf-pop,.tf-spin{animation:none}.tf-bar>i{transition:none}}
+.tf-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.tf-table th{font-weight:500;color:var(--mu);text-align:right;padding:.45rem .5rem;border-bottom:1px solid var(--ln);white-space:nowrap}
+.tf-table td{padding:.5rem;text-align:right;border-bottom:1px solid rgba(42,51,64,.6)}
+.tf-table th:first-child,.tf-table td:first-child{text-align:left}
+`;
+
+const ICONS = {
+  play: 'M6 4l14 8-14 8z', clock: 'M12 7v5l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z', target: 'M12 12m-2 0a2 2 0 104 0 2 2 0 10-4 0M12 12m-6 0a6 6 0 1012 0 6 6 0 10-12 0M12 12m-10 0a10 10 0 1020 0 10 10 0 10-20 0',
+  zap: 'M13 2L4 14h7l-1 8 9-12h-7z', book: 'M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2zM4 21V5M9 7h6', spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z',
+  hist: 'M3 12a9 9 0 109-9 9 9 0 00-6.4 2.6L3 8M3 3v5h5M12 7v5l3 2', gear: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z',
+  info: 'M12 16v-4M12 8h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', check: 'M5 13l4 4L19 7', x: 'M6 6l12 12M18 6L6 18', back: 'M15 18l-6-6 6-6', trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+  upload: 'M12 16V4M7 9l5-5 5 5M4 20h16', file: 'M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5', flame: 'M12 22c4 0 7-3 7-7 0-3-2-5-3-7-1 2-2 3-3 3 0-4-2-7-5-9 0 4-3 6-3 11 0 5 3 9 7 9z',
+  retry: 'M3 12a9 9 0 019-9 9 9 0 016.4 2.6L21 8M21 3v5h-5M21 12a9 9 0 01-9 9 9 9 0 01-6.4-2.6L3 16M3 21v-5h5', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', chart: 'M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-8',
+  trophy: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0zM7 6H4a3 3 0 003 4M17 6h3a3 3 0 01-3 4', pen: 'M4 20l4-1L19 8a2.1 2.1 0 00-3-3L5 16zM14 7l3 3', copy: 'M9 9h10v12H9zM5 15V3h10', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 12m-3 0a3 3 0 106 0 3 3 0 10-6 0',
+  warn: 'M12 9v4M12 17h.01M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z', print: 'M7 9V3h10v6M7 17H5a2 2 0 01-2-2v-4a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2h-2M7 14h10v7H7z',
+};
+const Ic = ({ n, s = 16, className = '' }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true"><path d={ICONS[n]} /></svg>
+);
+const Spinner = ({ s = 16 }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" className="tf-spin" aria-hidden="true"><path d="M12 3a9 9 0 019 9" /></svg>
+);
+
+const MODES = {
+  free:   { label: '自由練習', sec: 0,    desc: '教材を最後まで打ち切る。5秒を超える停止時間は計測から除外' },
+  t60:    { label: '1分',     sec: 60,   desc: '60秒の瞬発力測定' },
+  t120:   { label: '2分',     sec: 120,  desc: '120秒の実務入力測定' },
+  t180:   { label: '3分',     sec: 180,  desc: '180秒の標準測定' },
+  t300:   { label: '5分',     sec: 300,  desc: '300秒の本格測定。安定度・持続率も算出' },
+  t600:   { label: '10分',    sec: 600,  desc: '600秒の持続力測定' },
+  t1200:  { label: '20分',    sec: 1200, desc: '1,200秒の耐久測定' },
+  sudden: { label: '即死',    sec: 0,    desc: '1文字でも間違えた瞬間に終了するノーミス挑戦' },
+};
+const IDLE_CAP_MS = 5000;
+const fmtTime = (s) => { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmtDate = (iso) => { try { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; } catch { return ''; } };
+const uid = () => Math.random().toString(36).slice(2, 9);
+const RANK_COLOR = { D: '#8e98a6', C: '#8fb8a0', B: '#6fb7c9', A: '#7fa7e0', 'A+': '#a595e6', S: '#d8b45e', SS: '#f0c25a', SSS: '#ff9f43', GOD: '#ff6b57' };
+
+/* ---- チャート（外部ライブラリ不使用のSVG） ---- */
+function LineChart({ data, height = 150, color = '#6fb7c9', yLabel = '', xKey = 't', yKey = 'cpm', refLine = null }) {
+  if (!data || data.length < 2) return <div className="c-mu text-xs py-6 text-center">グラフに必要なデータが不足しています（約20秒以上の入力が必要）</div>;
+  const W = 640, H = height, pl = 40, pr = 12, pt = 10, pb = 22;
+  const xs = data.map((d) => d[xKey]), ys = data.map((d) => d[yKey]);
+  const maxY = Math.max(10, ...ys, refLine || 0) * 1.12, minX = Math.min(...xs), maxX = Math.max(...xs);
+  const X = (v) => pl + ((v - minX) / Math.max(1, maxX - minX)) * (W - pl - pr), Y = (v) => pt + (1 - v / maxY) * (H - pt - pb);
+  const path = data.map((d, i) => `${i ? 'L' : 'M'}${X(d[xKey]).toFixed(1)},${Y(d[yKey]).toFixed(1)}`).join(' ');
+  const ticks = [0, 0.5, 1].map((r) => Math.round(maxY * r));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={yLabel + 'の推移グラフ'}>
+      {ticks.map((t, i) => (<g key={i}><line x1={pl} x2={W - pr} y1={Y(t)} y2={Y(t)} stroke="#2a3340" strokeDasharray="3 4" /><text x={pl - 6} y={Y(t) + 4} textAnchor="end" fontSize="10" fill="#8e98a6">{t}</text></g>))}
+      {refLine ? <g><line x1={pl} x2={W - pr} y1={Y(refLine)} y2={Y(refLine)} stroke="#d8b45e" strokeDasharray="5 4" opacity=".7" /><text x={W - pr} y={Y(refLine) - 4} textAnchor="end" fontSize="10" fill="#d8b45e">平均 {refLine}</text></g> : null}
+      <path d={path + ` L${X(xs[xs.length - 1])},${Y(0)} L${X(xs[0])},${Y(0)}Z`} fill={color} opacity=".1" />
+      <path d={path} fill="none" stroke={color} strokeWidth="2.2" strokeLinejoin="round" />
+      {data.map((d, i) => (data.length <= 40 ? <circle key={i} cx={X(d[xKey])} cy={Y(d[yKey])} r="2.6" fill={color} /> : null))}
+      <text x={W - pr} y={H - 4} textAnchor="end" fontSize="10" fill="#8e98a6">{xKey === 't' ? '経過秒' : ''}</text>
+    </svg>
+  );
+}
+
+function Modal({ open, onClose, title, children, wide }) {
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6 overflow-y-auto" style={{ background: 'rgba(5,8,12,.78)' }} onMouseDown={(e) => e.target === e.currentTarget && onClose()} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`tf-card w-full ${wide ? 'max-w-4xl' : 'max-w-xl'} my-4 tf-pop`}>
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid var(--ln)' }}>
+          <h2 className="font-bold text-[15px]">{title}</h2>
+          <button className="tf-btn !p-1.5" onClick={onClose} aria-label="閉じる"><Ic n="x" /></button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Seg({ value, onChange, options, label }) {
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
+      {options.map((o) => (<button key={o.v} className="tf-chip" aria-pressed={value === o.v} onClick={() => onChange(o.v)} title={o.t || ''}>{o.l}</button>))}
+    </div>
+  );
+}
+
+/* ---- 効果音（WebAudio。無効化可） ---- */
+const sfx = (() => {
+  let ctx = null;
+  const get = () => { try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; } catch { return null; } };
+  const tone = (f, d, v, type = 'triangle') => { const c = get(); if (!c) return; const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f; g.gain.setValueAtTime(v, c.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + d); o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + d); };
+  return { key: (v) => tone(520 + Math.random() * 60, 0.05, 0.05 * v), ok: (v) => { tone(660, 0.12, 0.08 * v); setTimeout(() => tone(880, 0.16, 0.07 * v), 90); }, ng: (v) => tone(180, 0.22, 0.09 * v, 'sawtooth'), done: (v) => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.25, 0.08 * v), i * 110)) };
+})();
+
+/* ============================================================================
+   HOME : 教材選択・AI生成・測定条件
+   ========================================================================== */
+const GENRES = ['ニュース解説', 'エッセイ', 'ビジネス文書', '科学・技術解説', '歴史読み物', '短編小説（創作）', '手紙・メール文', '旅行記'];
+const DIFFS = [
+  { v: 'やさしい（ひらがな多め・易しい語彙）', l: 'やさしい' },
+  { v: '標準（新聞程度の漢字密度）', l: '標準' },
+  { v: '難しい（漢語・専門語・同音異義語を多く含む）', l: '難しい' },
+];
+const STYLES = [{ v: 'です・ます調', l: 'です・ます' }, { v: 'だ・である調', l: 'だ・である' }];
+const THEME_CHIPS = ['再生可能エネルギーの現在地', '雨の日の商店街', '新入社員への業務依頼メール', '深海探査の最前線', '江戸の町人文化', '週末の山小屋', '睡眠と記憶の関係', '地方の小さな図書館'];
+
+function HomeView({ material, setMaterial, library, setLibrary, mode, setMode, settings, setSettings, onStart, toast, onOpenMethod, history }) {
+  const [tab, setTab] = useState('ai');
+  const [form, setForm] = useState({ theme: '', genre: GENRES[0], difficulty: DIFFS[1].v, chars: 1000, style: STYLES[0].v });
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const [paste, setPaste] = useState({ title: '', text: '' });
+  const acRef = useRef(null);
+  const fileRef = useRef(null);
+
+  const adopt = (m) => {
+    const full = { id: uid(), createdAt: new Date().toISOString(), ...m };
+    setMaterial(full);
+    setLibrary((lib) => [full, ...lib.filter((x) => x.text !== full.text)].slice(0, 40));
+  };
+  const run = async (kind, fn) => {
+    setBusy(kind); setErr('');
+    const ac = new AbortController(); acRef.current = ac;
+    try { await fn(ac.signal); } catch (e) { if (e?.name !== 'AbortError') setErr(`${e?.message || 'AI処理に失敗しました'}。少し待ってもう一度お試しください。`); }
+    finally { setBusy(''); }
+  };
+  const generate = (focus) => run('gen', async (signal) => {
+    const r = await aiGenerateMaterial({ ...form, focus, signal });
+    if (toG(r.text).length < 40) throw new Error('生成された文章が短すぎました');
+    adopt({ title: r.title, text: r.text, source: 'ai' }); toast('教材を生成しました', 'ok');
+  });
+  const onFile = (f) => {
+    if (!f) return;
+    const name = f.name.replace(/\.[^.]+$/, '');
+    if (/\.(txt|md)$/i.test(f.name) || f.type.startsWith('text/')) {
+      const rd = new FileReader(); rd.onload = () => { const t = sanitizeMaterialText(String(rd.result)); if (toG(t).length < 20) return setErr('テキストが短すぎます'); adopt({ title: name, text: t, source: 'file' }); toast('ファイルを読み込みました', 'ok'); }; rd.readAsText(f, 'utf-8'); return;
+    }
+    if (!/(pdf|png|jpe?g|webp)$/i.test(f.name)) return setErr('対応形式: txt / md / pdf / png / jpg / webp');
+    if (f.size > 14 * 1024 * 1024) return setErr('ファイルが大きすぎます（14MBまで）');
+    run('file', async (signal) => {
+      const b64 = await new Promise((res, rej) => { const rd = new FileReader(); rd.onload = () => res(String(rd.result).split(',')[1]); rd.onerror = rej; rd.readAsDataURL(f); });
+      const mime = f.type || (/pdf$/i.test(f.name) ? 'application/pdf' : 'image/png');
+      const r = await aiExtractFromFile({ base64: b64, mimeType: mime, signal });
+      if (toG(r.text).length < 20) throw new Error('文字を抽出できませんでした');
+      adopt({ title: r.title || name, text: r.text, source: 'file' }); toast('AIで本文を抽出しました', 'ok');
+    });
+  };
+
+  const chars = material ? toG(normalizeForJudge(material.text, 'standard')).length : 0;
+  const nSec = material ? splitIntoSections(material.text, settings.sectionLen).length : 0;
+  const need = MODES[mode].sec ? Math.round((MODES[mode].sec / 60) * 220) : 0;
+  const best = history.reduce((m, h) => Math.max(m, h.speed.netCpm), 0);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 grid lg:grid-cols-5 gap-5">
+      <section className="lg:col-span-3 tf-card p-5" aria-labelledby="h-material">
+        <div className="flex items-center justify-between mb-3">
+          <h2 id="h-material" className="font-bold text-base flex items-center gap-2"><Ic n="book" className="c-ai" />練習する文章</h2>
+          {material && <span className="tf-h">選択中：{material.title}</span>}
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-4" role="tablist">
+          {[['ai', 'AIで作る', 'spark'], ['paste', '貼り付け', 'pen'], ['file', 'ファイル/PDF', 'upload'], ['saved', `保存済み (${library.length})`, 'file']].map(([k, l, ic]) => (
+            <button key={k} role="tab" aria-selected={tab === k} className="tf-chip flex items-center gap-1.5" aria-pressed={tab === k} onClick={() => { setTab(k); setErr(''); }}><Ic n={ic} s={13} />{l}</button>
+          ))}
+        </div>
+
+        {tab === 'ai' && (
+          <div className="space-y-3.5">
+            <div>
+              <label className="tf-h block mb-1" htmlFor="theme">テーマ（空欄ならAIにおまかせ）</label>
+              <input id="theme" className="tf-input" value={form.theme} placeholder="例：港町の朝市／新製品の発表を伝える社内文書" onChange={(e) => setForm({ ...form, theme: e.target.value })} />
+              <div className="flex flex-wrap gap-1.5 mt-2">{THEME_CHIPS.map((t) => (<button key={t} className="tf-chip" onClick={() => setForm({ ...form, theme: t })}>{t}</button>))}</div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3.5">
+              <div><div className="tf-h mb-1">ジャンル</div><select className="tf-input" value={form.genre} onChange={(e) => setForm({ ...form, genre: e.target.value })}>{GENRES.map((g) => <option key={g}>{g}</option>)}</select></div>
+              <div><div className="tf-h mb-1">文体</div><Seg label="文体" value={form.style} onChange={(v) => setForm({ ...form, style: v })} options={STYLES} /></div>
+              <div><div className="tf-h mb-1">漢字の密度・難易度</div><Seg label="難易度" value={form.difficulty} onChange={(v) => setForm({ ...form, difficulty: v })} options={DIFFS} /></div>
+              <div><div className="tf-h mb-1">文字数</div><Seg label="文字数" value={form.chars} onChange={(v) => setForm({ ...form, chars: v })} options={[400, 800, 1200, 2000, 3000].map((n) => ({ v: n, l: `${n}字` }))} /></div>
+            </div>
+            <div className="flex items-center gap-2.5 pt-1">
+              <button className="tf-btn tf-btn-ai" disabled={!!busy} onClick={() => generate('')}>{busy === 'gen' ? <Spinner /> : <Ic n="spark" />}{busy === 'gen' ? 'Gemini Flashが執筆中…' : 'AIで教材を生成'}</button>
+              {busy === 'gen' && <button className="tf-btn" onClick={() => acRef.current?.abort()}>中止</button>}
+              <span className="tf-h">毎回オリジナルの文章を生成します</span>
+            </div>
+          </div>
+        )}
+
+        {tab === 'paste' && (
+          <div className="space-y-3">
+            <input className="tf-input" placeholder="教材名（任意）" value={paste.title} onChange={(e) => setPaste({ ...paste, title: e.target.value })} aria-label="教材名" />
+            <textarea className="tf-input tf-scroll" rows={9} placeholder="練習したい文章を貼り付けてください。PDFやWebからの貼り付けで改行が乱れている場合は「AIで整形」が使えます。" value={paste.text} onChange={(e) => setPaste({ ...paste, text: e.target.value })} aria-label="貼り付けテキスト" />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button className="tf-btn tf-btn-main" disabled={toG(paste.text).length < 20} onClick={() => { adopt({ title: paste.title.trim() || '貼り付け教材', text: sanitizeMaterialText(paste.text), source: 'paste' }); toast('教材をセットしました', 'ok'); }}><Ic n="check" />この文章を使う</button>
+              <button className="tf-btn tf-btn-ai" disabled={!!busy || toG(paste.text).length < 20} onClick={() => run('clean', async (signal) => { const t = await aiCleanText({ text: paste.text.slice(0, 20000), signal }); setPaste((p) => ({ ...p, text: t })); toast('AIで整形しました（内容は変更していません）', 'ok'); })}>{busy === 'clean' ? <Spinner /> : <Ic n="spark" />}AIで整形</button>
+              <span className="tf-h tf-mono">{toG(paste.text).length.toLocaleString()} 字</span>
+            </div>
+          </div>
+        )}
+
+        {tab === 'file' && (
+          <div className="space-y-3">
+            <button className="w-full tf-card2 py-9 flex flex-col items-center gap-2 cursor-pointer hover:border-[#3a4554]" disabled={!!busy} onClick={() => fileRef.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); onFile(e.dataTransfer.files?.[0]); }}>
+              {busy === 'file' ? <Spinner s={22} /> : <Ic n="upload" s={22} className="c-ai" />}
+              <span className="text-sm font-semibold">{busy === 'file' ? 'AIが本文を読み取っています…' : 'ファイルをここへドロップ、またはクリックして選択'}</span>
+              <span className="tf-h">txt / md はそのまま読込、PDF・画像は Gemini が本文を書き起こします（14MBまで）</span>
+            </button>
+            <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.png,.jpg,.jpeg,.webp,text/plain" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ''; }} />
+          </div>
+        )}
+
+        {tab === 'saved' && (
+          <div className="space-y-2 max-h-80 overflow-y-auto tf-scroll pr-1">
+            {library.length === 0 && <div className="c-mu text-sm py-8 text-center">保存済みの教材はまだありません。<br />AI生成・貼り付け・ファイル読込で作成した教材が自動で保存されます。</div>}
+            {library.map((m) => (
+              <div key={m.id} className="tf-card2 px-3 py-2.5 flex items-center gap-3">
+                <button className="flex-1 text-left min-w-0" onClick={() => { setMaterial(m); toast(`「${m.title}」をセットしました`, 'ok'); }}>
+                  <div className="text-sm font-semibold truncate">{m.title}</div>
+                  <div className="tf-h tf-mono">{toG(m.text).length.toLocaleString()}字 ・ {fmtDate(m.createdAt)} ・ {m.source === 'ai' ? 'AI生成' : m.source === 'file' ? 'ファイル' : '貼り付け'}</div>
+                </button>
+                <button className="tf-btn !p-1.5" aria-label="削除" onClick={() => setLibrary((lib) => lib.filter((x) => x.id !== m.id))}><Ic n="trash" s={14} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {err && <div className="mt-3 tf-card2 px-3 py-2 text-sm c-sh flex items-start gap-2" role="alert"><Ic n="warn" className="mt-0.5 shrink-0" />{err}</div>}
+
+        {material ? (
+          <div className="mt-4 tf-card2 p-3.5">
+            <div className="flex items-center justify-between gap-3 mb-1.5"><div className="font-semibold text-sm truncate">{material.title}</div><span className="tf-h tf-mono shrink-0">{chars.toLocaleString()}字 / {nSec}区間</span></div>
+            <p className="tf-serif text-[13px] c-mu leading-relaxed line-clamp-3" style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{material.text}</p>
+          </div>
+        ) : (
+          <div className="mt-4 tf-card2 p-4 text-sm c-mu">教材が未選択です。「AIで作る」からテーマを選んで生成するか、手持ちの文章を貼り付けてください。</div>
+        )}
+      </section>
+
+      <aside className="lg:col-span-2 space-y-5">
+        <section className="tf-card p-5" aria-labelledby="h-mode">
+          <h2 id="h-mode" className="font-bold text-base flex items-center gap-2 mb-3"><Ic n="clock" className="c-gd" />測定モード</h2>
+          <div className="grid grid-cols-4 gap-1.5">
+            {Object.entries(MODES).map(([k, m]) => (<button key={k} className="tf-chip text-center" aria-pressed={mode === k} onClick={() => setMode(k)} title={m.desc}>{m.label}</button>))}
+          </div>
+          <p className="tf-h mt-2.5">{MODES[mode].desc}</p>
+          {need > 0 && chars > 0 && chars < need && <p className="text-xs c-gd mt-2 flex gap-1.5"><Ic n="warn" s={14} className="shrink-0 mt-0.5" />この教材（{chars}字）は{MODES[mode].label}測定には短めです。{need}字以上を推奨。文章を使い切ると、その時点で終了します。</p>}
+
+          <h3 className="font-bold text-sm mt-5 mb-2 flex items-center gap-2"><Ic n="shield" s={15} className="c-ai" />判定条件</h3>
+          <div className="space-y-3">
+            <div><div className="tf-h mb-1">ランク基準</div><Seg label="ランク基準" value={settings.profile} onChange={(v) => setSettings({ ...settings, profile: v })} options={Object.entries(PROFILES).map(([k, p]) => ({ v: k, l: p.label, t: p.desc }))} /></div>
+            <div><div className="tf-h mb-1">文字の照合</div><Seg label="文字の照合" value={settings.level} onChange={(v) => setSettings({ ...settings, level: v })} options={Object.entries(MATCH_LEVELS).map(([k, p]) => ({ v: k, l: p.label, t: p.desc }))} /><p className="tf-h mt-1">{MATCH_LEVELS[settings.level].desc}</p></div>
+            <div><div className="tf-h mb-1">1区間の長さ</div><Seg label="区間の長さ" value={settings.sectionLen} onChange={(v) => setSettings({ ...settings, sectionLen: v })} options={[100, 150, 200, 300].map((n) => ({ v: n, l: `約${n}字` }))} /></div>
+          </div>
+          <button className="tf-btn w-full mt-4" onClick={onOpenMethod}><Ic n="info" />判定のしくみ（計算式と基準表）を見る</button>
+        </section>
+
+        <button className="tf-btn tf-btn-main w-full !py-3.5 !text-base" disabled={!material || chars < 20} onClick={onStart}><Ic n="play" s={18} />{MODES[mode].label}で開始</button>
+        {best > 0 && <div className="tf-card2 px-4 py-3 text-sm flex items-center justify-between"><span className="c-mu">自己最高 正味速度</span><span className="tf-mono font-bold c-gd">{best} 字/分</span></div>}
+      </aside>
+    </div>
+  );
+}
+
+/* ============================================================================
+   TYPING : 入力セッション（変換確定後の文字だけを計測）
+   ========================================================================== */
+function mapDisplay(raw, level) {
+  const out = []; let ni = 0;
+  for (const g of toG(raw)) {
+    const n = toG(normalizeForJudge(g, level)).length;
+    out.push({ ch: g, ni: n > 0 ? ni : -1 });
+    ni += n;
+  }
+  return out;
+}
+
+function TypingSession({ material, mode, settings, onFinish, onAbort, toast }) {
+  const sections = useMemo(() => splitIntoSections(material.text, settings.sectionLen), [material, settings.sectionLen]);
+  const limit = MODES[mode].sec;
+  const level = settings.level;
+  const totalChars = useMemo(() => sections.reduce((a, s) => a + toG(normalizeForJudge(s, level)).length, 0), [sections, level]);
+
+  const [idx, setIdx] = useState(0);
+  const [text, setText] = useState('');
+  const [committed, setCommitted] = useState('');
+  const [started, setStarted] = useState(false);
+  const [, setTick] = useState(0);
+  const [laps, setLaps] = useState([]);
+  const taRef = useRef(null);
+  const R = useRef({
+    start: null, last: null, activeMs: 0, composing: false, lastCompEnd: 0, idx: 0, inputs: [], laps: [], events: [],
+    committedVal: '', secStartAxis: null, commitActiveMs: 0, commitWallMs: 0, confirmedN: 0, agg: { ok: 0, dist: 0, denom: 0, evalLen: 0 }, finished: false,
+  });
+
+  const axisSec = () => {
+    const r = R.current; if (r.start == null) return 0;
+    if (limit > 0) return (performance.now() - r.start) / 1000;
+    return (r.activeMs + Math.min(performance.now() - r.last, IDLE_CAP_MS)) / 1000;
+  };
+  const axisAtCommit = () => { const r = R.current; return limit > 0 ? (r.commitWallMs - r.start) / 1000 : r.commitActiveMs / 1000; };
+  const markActivity = () => {
+    const r = R.current, t = performance.now();
+    if (r.start == null) { r.start = t; r.last = t; setStarted(true); }
+    else { r.activeMs += Math.min(t - r.last, IDLE_CAP_MS); r.last = t; }
+    if (r.secStartAxis == null) r.secStartAxis = axisSec();
+  };
+  const focusTa = () => setTimeout(() => taRef.current?.focus(), 30);
+
+  const finish = (reason) => {
+    const r = R.current; if (r.finished) return; r.finished = true;
+    const secs = r.inputs.map((inp, k) => ({ target: sections[k], input: inp, full: true }));
+    const lapArr = [...r.laps];
+    const k = r.inputs.length;
+    if (reason !== 'complete' && k < sections.length && toG(normalizeForJudge(r.committedVal, level)).length > 0) {
+      secs.push({ target: sections[k], input: r.committedVal, full: false });
+      lapArr[k] = { sec: r.secStartAxis != null ? Math.max(0, axisAtCommit() - r.secStartAxis) : 0 };
+    }
+    if (secs.length === 0 || r.start == null) { toast('入力がないため記録しませんでした', 'info'); onAbort(); return; }
+    const sec = reason === 'timeup' ? limit : Math.max(0.5, axisAtCommit());
+    if (settings.sound) sfx.done(settings.volume);
+    const ev = evaluateSession({
+      sections: secs, level, profile: settings.profile, mode, events: r.events, laps: lapArr,
+      timing: { sec, limitSec: limit, finishedBy: reason, basis: limit > 0 ? 'wall' : 'active', wallSec: Number(((r.commitWallMs - r.start) / 1000).toFixed(1)), idleCapSec: IDLE_CAP_MS / 1000 },
+    });
+    onFinish({ id: uid(), at: new Date().toISOString(), title: material.title, materialId: material.id, materialChars: totalChars, ...ev });
+  };
+  const finishRef = useRef(finish); finishRef.current = finish;
+
+  const confirmSection = (val) => {
+    const r = R.current; if (r.finished) return;
+    const i = r.idx;
+    const tArr = toG(normalizeForJudge(sections[i], level)), iArr = toG(normalizeForJudge(val, level));
+    const a = alignGraphemes(tArr, iArr, false);
+    r.inputs[i] = val;
+    const sec = r.secStartAxis != null ? Math.max(0, axisAtCommit() - r.secStartAxis) : 0;
+    r.laps[i] = { sec };
+    const denom = Math.max(a.evalLen, a.inputLen);
+    r.agg.ok += a.ok; r.agg.dist += a.dist; r.agg.denom += denom; r.agg.evalLen += a.evalLen;
+    r.confirmedN += iArr.length;
+    setLaps((rows) => [...rows, { i: i + 1, acc: denom ? Number(((1 - a.dist / denom) * 100).toFixed(1)) : 0, cpm: sec > 1 ? Math.round((a.ok * 60) / sec) : null, sec, err: a.dist }]);
+    if (settings.sound) (a.dist === 0 ? sfx.ok : sfx.ng)(settings.volume);
+    if (i + 1 < sections.length) {
+      r.idx = i + 1; r.secStartAxis = null; r.committedVal = '';
+      setIdx(i + 1); setText(''); setCommitted(''); focusTa();
+    } else finish('complete');
+  };
+
+  const commit = (val) => {
+    const r = R.current; if (r.finished || val === r.committedVal) return;
+    r.committedVal = val; setCommitted(val);
+    r.commitWallMs = performance.now(); r.commitActiveMs = r.activeMs;
+    const iArr = toG(normalizeForJudge(val, level));
+    r.events.push({ t: axisAtCommit(), n: r.confirmedN + iArr.length });
+    const tArr = toG(normalizeForJudge(sections[r.idx], level));
+    if (mode === 'sudden') {
+      let bad = iArr.length > tArr.length;
+      for (let k = 0; k < iArr.length && !bad; k++) if (iArr[k] !== tArr[k]) bad = true;
+      if (bad) { if (settings.sound) sfx.ng(settings.volume); toast('ミスが出たため終了します', 'error'); finish('sudden'); return; }
+    }
+    if (iArr.length > 0 && iArr.length === tArr.length && iArr.every((c, k) => c === tArr[k])) confirmSection(val); // 完全一致 → 自動で次の区間へ
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTick((x) => x + 1);
+      const r = R.current;
+      if (limit > 0 && r.start != null && !r.finished && (performance.now() - r.start) / 1000 >= limit) { toast(`${MODES[mode].label}の測定が終了しました`, 'ok'); finishRef.current('timeup'); }
+    }, 200);
+    taRef.current?.focus();
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line
+
+  const onKeyDown = (e) => {
+    const r = R.current;
+    if (e.key === 'Tab') { e.preventDefault(); return; }
+    if (e.key === 'Enter') {
+      const comp = e.nativeEvent.isComposing || e.keyCode === 229 || r.composing || performance.now() - r.lastCompEnd < 60;
+      if (comp) { markActivity(); return; }
+      e.preventDefault();
+      if (e.shiftKey) return;
+      markActivity();
+      if (e.ctrlKey || e.metaKey) { confirmSection(r.committedVal); return; }
+      const need = toG(normalizeForJudge(sections[r.idx], level)).length, have = toG(normalizeForJudge(r.committedVal, level)).length;
+      if (have >= need * 0.85) confirmSection(r.committedVal);
+      else toast(`あと${need - have}字ほど入力してください（Ctrl+Enterで強制的に次へ）`, 'info');
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) { markActivity(); if (settings.sound && (e.key.length === 1 || e.key === 'Backspace')) sfx.key(settings.volume); }
+  };
+
+  /* ---- 表示用の算出 ---- */
+  const tArr = useMemo(() => toG(normalizeForJudge(sections[idx] || '', level)), [sections, idx, level]);
+  const disp = useMemo(() => mapDisplay(sections[idx] || '', level), [sections, idx, level]);
+  const live = useMemo(() => alignGraphemes(tArr, toG(normalizeForJudge(committed, level)), true), [tArr, committed, level]);
+  const status = useMemo(() => { const a = new Array(tArr.length).fill('todo'); for (const s of live.segs) if (s.k !== 'extra' && s.ti < a.length) a[s.ti] = s.k; return a; }, [live, tArr]);
+
+  const r = R.current;
+  const t = axisSec();
+  const okAll = r.agg.ok + live.ok;
+  const denAll = r.agg.denom + Math.max(live.evalLen, live.inputLen);
+  const distAll = r.agg.dist + live.dist;
+  const liveCpm = t >= 6 ? Math.round((okAll * 60) / t) : null;
+  const liveAcc = denAll > 0 ? (1 - distAll / denAll) * 100 : null;
+  const progress = Math.min(100, Math.round(((r.agg.evalLen + live.evalLen) / Math.max(1, totalChars)) * 100));
+  const rankNow = liveCpm != null ? rankFromCpm(liveCpm, settings.profile) : null;
+  const remain = limit > 0 ? Math.max(0, limit - t) : null;
+  const latin = (committed.match(/[A-Za-z]/g) || []).length;
+  const imeOff = committed.length >= 5 && latin / committed.length > 0.5 && tArr.filter((c) => classOf(c) !== 'alnum').length / Math.max(1, tArr.length) > 0.5;
+  const fs = { compact: '1.1rem', standard: '1.35rem', large: '1.6rem', huge: '1.9rem' }[settings.fontSize] || '1.35rem';
+  const lh = { compact: '2.1rem', standard: '2.6rem', large: '3rem', huge: '3.5rem' }[settings.fontSize] || '2.6rem';
+  const cursorIdx = live.evalLen;
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-5">
+      <div className="tf-card px-4 py-3 mb-4 flex flex-wrap items-center gap-x-6 gap-y-2" role="status" aria-live="off">
+        <div><div className="tf-h">正味速度（正解字/分）</div><div className="tf-mono text-2xl font-bold">{liveCpm ?? '—'}{rankNow && <span className="text-sm ml-2" style={{ color: RANK_COLOR[rankNow.rank.id] }}>{rankNow.rank.id}</span>}</div></div>
+        <div><div className="tf-h">正確率</div><div className="tf-mono text-2xl font-bold" style={{ color: liveAcc == null ? undefined : liveAcc >= 97 ? 'var(--gr)' : liveAcc >= 90 ? 'var(--gd)' : 'var(--sh)' }}>{liveAcc == null ? '—' : liveAcc.toFixed(1)}<span className="text-sm c-mu">%</span></div></div>
+        <div><div className="tf-h">{limit > 0 ? '残り時間' : '計測時間'}</div><div className={`tf-mono text-2xl font-bold ${remain != null && remain <= 10 && started ? 'c-sh' : ''}`}>{fmtTime(remain != null ? remain : t)}</div></div>
+        <div className="flex-1 min-w-[140px]"><div className="flex justify-between tf-h mb-1"><span>区間 {idx + 1}/{sections.length}</span><span className="tf-mono">{progress}%</span></div><div className="tf-bar"><i style={{ width: `${progress}%`, background: 'var(--ai)' }} /></div></div>
+        <div className="flex gap-1.5">
+          <button className="tf-btn" onClick={() => finish('manual')} title="ここまでの入力で判定します"><Ic n="check" s={14} />判定する</button>
+          <button className="tf-btn" onClick={() => { R.current.finished = true; onAbort(); }} title="記録せずに戻ります"><Ic n="back" s={14} />中止</button>
+        </div>
+      </div>
+
+      {mode === 'sudden' && <div className="mb-3 text-sm c-sh flex items-center gap-2"><Ic n="flame" />即死モード：確定した文字が1文字でも違った時点で終了します</div>}
+
+      <div className="tf-paper p-5 sm:p-7 mb-4 cursor-text" onClick={() => taRef.current?.focus()}>
+        <div className="flex items-center justify-between mb-2 text-xs" style={{ color: '#7a7566' }}><span>お手本（変換後の文字で照合します）</span><span className="tf-mono">{live.evalLen}/{tArr.length}字</span></div>
+        <div className="tf-serif tf-ruled select-none break-all" style={{ fontSize: fs, lineHeight: lh, '--lh': lh, letterSpacing: '.06em' }} aria-label="お手本の文章">
+          {disp.map((d, k) => {
+            let cls = 'tf-todo';
+            if (d.ni >= 0) { const st = status[d.ni]; cls = d.ni === cursorIdx && st === 'todo' ? 'tf-cur tf-todo' : st === 'ok' ? 'tf-done' : st === 'sub' ? 'tf-bad' : st === 'miss' ? 'tf-skip' : 'tf-todo'; }
+            return <span key={k} className={cls}>{d.ch}</span>;
+          })}
+        </div>
+        {sections[idx + 1] && <div className="mt-3 pt-2 text-xs truncate" style={{ color: '#8a8575', borderTop: '1px dashed rgba(100,90,60,.3)' }}>次：{sections[idx + 1]}</div>}
+      </div>
+
+      {imeOff && <div className="mb-3 tf-card2 px-3 py-2 text-sm c-gd flex items-center gap-2" role="alert"><Ic n="warn" />日本語IMEがオフの可能性があります（半角英字が多く入力されています）。「半角/全角」キーで切り替えてください。</div>}
+
+      <textarea ref={taRef} value={text} rows={4} spellCheck={false} autoComplete="off" autoCapitalize="off" aria-label="入力欄"
+        className="tf-input tf-serif" style={{ fontSize: fs, lineHeight: 1.9, padding: '14px 16px', resize: 'none' }}
+        placeholder="日本語IMEをオンにして、お手本の文章を変換・確定しながら入力します"
+        onChange={(e) => { const v = e.target.value; setText(v); markActivity(); if (!e.nativeEvent.isComposing && !R.current.composing) commit(v); }}
+        onCompositionStart={() => { R.current.composing = true; markActivity(); }}
+        onCompositionUpdate={() => markActivity()}
+        onCompositionEnd={(e) => { R.current.composing = false; R.current.lastCompEnd = performance.now(); markActivity(); commit(e.currentTarget.value); }}
+        onKeyDown={onKeyDown} />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 tf-h">
+        <span>入力 <b className="tf-mono c-gr">{live.inputLen}</b>字 ／ 誤り <b className={`tf-mono ${live.dist ? 'c-sh' : 'c-gr'}`}>{live.dist}</b>字（変換確定後の文字で判定）</span>
+        <span>Enter＝区間確定（85%以上）／ Ctrl+Enter＝強制確定 ／ 完全一致で自動送り</span>
+      </div>
+
+      {laps.length > 0 && (
+        <div className="tf-card mt-4 p-3">
+          <div className="tf-h mb-1.5">完了した区間</div>
+          <div className="flex flex-wrap gap-2">{laps.slice(-8).map((l) => (<div key={l.i} className="tf-card2 px-2.5 py-1.5 text-xs tf-mono"><span className="c-mu">#{l.i}</span> <b>{l.cpm ?? '—'}</b>字/分 <span className={l.err ? 'c-sh' : 'c-gr'}>{l.acc}%</span></div>))}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================================
+   RESULT : 結果画面（判定根拠を数式つきで全公開）
+   ========================================================================== */
+function buildReport(r) {
+  const L = [];
+  L.push(`【TypingForge 測定レポート】${r.title}`);
+  L.push(`日時: ${fmtDate(r.at)} / モード: ${MODES[r.mode]?.label} / 基準: ${PROFILES[r.rank.profile]?.label} / 照合: ${MATCH_LEVELS[r.level]?.label}`);
+  L.push(`速度ランク: ${r.rank.id}（${r.rank.name}） ${r.reliability.certified ? '【認定】' : '【参考記録】' + r.reliability.reasons.join('／')}`);
+  L.push(`正味速度: ${r.speed.netCpm}字/分（粗速度 ${r.speed.grossCpm}字/分）`);
+  L.push(`正確率: ${r.totals.accuracy}%（誤字${r.totals.sub} 脱字${r.totals.miss} 余字${r.totals.extra} / 評価対象${r.totals.evalLen}字）`);
+  L.push(`計測時間: ${r.timing.sec}秒（${r.timing.basis === 'wall' ? '壁時計' : 'アイドル除外'}）`);
+  L.push(`総合スコア: ${r.score.total}/1000（速度${r.score.speedPts}/600 + 精度${r.score.accPts}/300 + 安定${r.score.stabPts ?? '算出不可'}/100）`);
+  L.push(`判定方式: IMEで変換・確定された日本語の文字を1文字単位で照合（編集距離）。ローマ字は使用しない。`);
+  return L.join('\n');
+}
+
+function Step({ no, title, children }) {
+  return (
+    <li className="flex gap-3">
+      <div className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold tf-mono" style={{ background: 'var(--p3)', color: 'var(--gd)' }}>{no}</div>
+      <div className="min-w-0 flex-1 pb-4" style={{ borderBottom: '1px solid rgba(42,51,64,.55)' }}>
+        <div className="font-semibold text-sm mb-1">{title}</div>
+        <div className="text-[13px] c-mu leading-relaxed space-y-1">{children}</div>
+      </div>
+    </li>
+  );
+}
+const Fx = ({ children }) => <code className="tf-mono text-[12px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg)', color: '#cfd6df' }}>{children}</code>;
+
+function Evidence({ r }) {
+  const T = r.totals, min = r.timing.sec / 60;
+  return (
+    <ol className="space-y-3.5 list-none p-0 m-0">
+      <Step no="1" title="評価の対象">
+        <p>評価対象は <b className="text-[var(--tx)] tf-mono">{T.evalLen}</b> 字（{r.sections.length}区間）。{r.sections.some((s) => !s.full) ? '最後の区間は途中までの入力なので、まだ到達していない末尾はミス扱いにせず評価から外しています。' : '全区間を最後まで入力しています。'}変換が確定していない（変換中の）文字は計測に含みません。</p>
+      </Step>
+      <Step no="2" title="正誤の判定方法">
+        <p><b className="text-[var(--tx)]">IMEで変換・確定された日本語の文字</b>を、お手本と1文字ずつ照合します。ローマ字の綴りや打鍵の並びは一切見ていません。「橋」と「箸」のように読みが同じでも別の文字は誤字です。</p>
+        <p>お手本と入力の最適な対応づけ（編集距離）を求め、<b className="text-[var(--gr)]">正解</b>・誤字（置換）・脱字（入力漏れ）・余字（余分な入力）に分類します。照合基準：<b className="text-[var(--tx)]">{MATCH_LEVELS[r.level].label}</b>（{MATCH_LEVELS[r.level].desc}）</p>
+      </Step>
+      <Step no="3" title="文字数の内訳">
+        <p><span className="c-gr">正解 {T.ok}</span> ／ <span className="c-sh">誤字 {T.sub}</span> ／ <span className="c-sh">脱字 {T.miss}</span> ／ <span className="c-sh">余字 {T.extra}</span>　→ 誤り合計 <b className="tf-mono text-[var(--tx)]">{T.dist}</b> 字</p>
+      </Step>
+      <Step no="4" title="正確率">
+        <p><Fx>正確率 = 1 − 誤り合計 ÷ 照合した文字数</Fx>（区間ごとに「お手本の評価字数」と「入力字数」の大きいほうを分母に合算）</p>
+        <p><Fx>1 − {T.dist} ÷ {T.denom} = {T.accuracy}%</Fx>　精度グレード <b style={{ color: 'var(--gd)' }}>{r.accGrade.id}</b>（{r.accGrade.label}）</p>
+      </Step>
+      <Step no="5" title="計測時間">
+        {r.timing.basis === 'wall'
+          ? <p>制限時間モードなので <b className="text-[var(--tx)]">開始から終了までの実時間</b>で計測します。<Fx>{r.timing.sec} 秒</Fx>{r.timing.finishedBy === 'timeup' ? '（時間いっぱいまで測定）' : '（時間内に終了）'}</p>
+          : <p>自由練習・即死モードでは、<b className="text-[var(--tx)]">{r.timing.idleCapSec}秒を超える停止（読む・考える時間）を除いた入力時間</b>で計測します。<Fx>{r.timing.sec} 秒</Fx>（最後に文字を確定した時点まで。画面を開いていた実時間は {r.timing.wallSec} 秒）</p>}
+      </Step>
+      <Step no="6" title="速度（正味）">
+        <p><Fx>正味速度 = 正解した字数 ÷ 計測時間(分)</Fx>　誤字・余字は速度に加算されません。訂正に使った時間は計測時間に含まれるので、直す手間もきちんと反映されます。</p>
+        <p><Fx>{T.ok} ÷ {min.toFixed(2)}分 = {r.speed.netCpm} 字/分</Fx>　（参考：入力した全字数ベースの粗速度は <Fx>{T.inputLen} ÷ {min.toFixed(2)} = {r.speed.grossCpm} 字/分</Fx>）</p>
+      </Step>
+      <Step no="7" title="ランクの決定">
+        <p>基準「{PROFILES[r.rank.profile].label}」の表で、正味速度 <b className="tf-mono text-[var(--tx)]">{r.speed.netCpm}</b> 字/分が到達している最高のランクが <b style={{ color: RANK_COLOR[r.rank.id] }}>{r.rank.id}（{r.rank.name}）</b> です。{r.rank.next ? <>次の <b>{r.rank.next.id}</b> には {r.rank.next.min} 字/分が必要で、あと <b className="tf-mono text-[var(--tx)]">{r.rank.toNext}</b> 字/分です。</> : '最上位ランクです。'}</p>
+      </Step>
+      <Step no="8" title="認定／参考記録の区別">
+        {r.reliability.certified
+          ? <p className="c-gr">次の条件をすべて満たしているため「認定」記録です：正解80字以上・計測30秒以上・正確率85%以上・制限時間モードは時間いっぱいまで測定。</p>
+          : <p className="c-gd">次の理由で「参考記録」です：{r.reliability.reasons.join('／')}。ランクは表示しますが、統計的な信頼度が低い記録です。</p>}
+      </Step>
+      <Step no="9" title="総合スコア（1000点満点）">
+        <p><Fx>速度 {r.score.speedPts}/600</Fx> + <Fx>精度 {r.score.accPts}/300</Fx> + <Fx>安定 {r.score.stabPts === null ? '算出不可' : r.score.stabPts + '/100'}</Fx> = <b className="tf-mono text-[var(--tx)]">{r.score.total}</b></p>
+        <p>速度点 = 600 × 正味速度 ÷ GOD基準（{r.rank.ladder[8].min}字/分）／ 精度点 = 300 × (正確率 − 85) ÷ 15（85%以下は0点）／ 安定点 = ペース安定度。{r.score.stabPts === null ? '安定度を測るには約80秒以上の入力が必要なため、速度と精度の得点を1000点換算しています。' : ''}</p>
+      </Step>
+      <Step no="10" title="他のタイピングアプリとの比較目安">
+        <p>ローマ字入力の打鍵数に換算すると<b className="text-[var(--tx)]"> 約 {r.speed.eqKeysPerSec} 打/秒</b>に相当します（推定：ひらがな≒1.9打、漢字≒3.9打、英数・記号≒1打で計算。±15%程度の誤差があります）。他アプリは「打鍵/秒」を基準にしているため、数字が大きく見えるのはそのためです。</p>
+      </Step>
+    </ol>
+  );
+}
+
+function Ladder({ r }) {
+  const lad = r.rank.ladder;
+  return (
+    <div className="grid grid-cols-9 gap-1" role="list" aria-label="ランク基準表">
+      {lad.map((x, i) => {
+        const reached = r.speed.netCpm >= x.min, cur = i === r.rank.idx;
+        return (
+          <div key={x.id} role="listitem" className="text-center rounded-lg py-2 px-0.5" style={{ background: cur ? 'rgba(216,180,94,.16)' : 'var(--p2)', border: `1px solid ${cur ? RANK_COLOR[x.id] : 'var(--ln)'}`, opacity: reached || cur ? 1 : 0.55 }}>
+            <div className="font-bold text-sm" style={{ color: RANK_COLOR[x.id] }}>{x.id}</div>
+            <div className="tf-mono text-[10px] c-mu">{x.min}+</div>
+            <div className="tf-mono text-[10px]" style={{ color: '#6f7a88' }}>≈{((x.min * REF_KEYS_PER_CHAR) / 60).toFixed(1)}打</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ResultView({ result: r, history, settings, onRetry, onHome, onDrill, toast, onOpenMethod }) {
+  const [coach, setCoach] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [err, setErr] = useState('');
+  const [kindFilter, setKindFilter] = useState('all');
+  const [showAll, setShowAll] = useState(false);
+  const prevBest = history.filter((h) => h.id !== r.id).reduce((m, h) => Math.max(m, h.speed.netCpm), 0);
+  const newBest = r.speed.netCpm > prevBest && prevBest > 0;
+  const col = RANK_COLOR[r.rank.id];
+  const kinds = Object.entries(r.typeCounts).sort((a, b) => b[1] - a[1]);
+  const blocks = r.blocks.filter((b) => kindFilter === 'all' || b.kind === kindFilter);
+  const shown = showAll ? blocks : blocks.slice(0, 20);
+
+  const runCoach = async () => {
+    setBusy('coach'); setErr('');
+    try { setCoach(await aiCoach({ result: r })); } catch (e) { setErr(`${e?.message || 'AI分析に失敗しました'}。時間をおいて再度お試しください。`); } finally { setBusy(''); }
+  };
+  const runDrill = async () => {
+    setBusy('drill'); setErr('');
+    const focus = [...new Set(Object.entries(r.pairCounts).sort((a, b) => b[1] - a[1]).map(([k]) => k.split('→')[0]).concat(r.blocks.filter((b) => b.target).map((b) => b.target)).filter((t) => toG(t).length <= 6))].slice(0, 10).join('、');
+    try {
+      const m = await aiGenerateMaterial({ theme: '苦手語句の克服（読み物として自然な文章で）', genre: 'エッセイ', difficulty: '標準（新聞程度の漢字密度）', chars: 600, style: 'です・ます調', focus: focus || '（特になし）' });
+      onDrill({ title: `${r.title}・苦手克服`, text: m.text, source: 'ai' });
+    } catch (e) { setErr(`${e?.message || '教材生成に失敗しました'}`); } finally { setBusy(''); }
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+      {/* ヒーロー */}
+      <section className="tf-card p-6 sm:p-8 tf-pop" aria-label="結果の要約">
+        <div className="flex flex-col sm:flex-row items-center sm:items-stretch gap-6">
+          <div className="flex flex-col items-center justify-center sm:w-52 shrink-0">
+            <div className="tf-h mb-1">速度ランク</div>
+            <div className="font-black leading-none tf-serif" style={{ fontSize: r.rank.id.length > 2 ? '4.2rem' : '5.5rem', color: col, textShadow: `0 0 34px ${col}55` }}>{r.rank.id}</div>
+            <div className="mt-2 text-sm font-semibold">{r.rank.name}</div>
+            <div className="mt-2 text-xs px-2.5 py-1 rounded-full" style={{ background: r.reliability.certified ? 'rgba(127,192,138,.14)' : 'rgba(216,180,94,.14)', color: r.reliability.certified ? 'var(--gr)' : 'var(--gd)' }}>{r.reliability.certified ? '認定記録' : '参考記録'}</div>
+          </div>
+          <div className="flex-1 w-full">
+            <div className="text-sm c-mu mb-3 truncate">{r.title} ・ {MODES[r.mode]?.label} ・ {fmtDate(r.at)}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="tf-card2 p-3"><div className="tf-h">正味速度</div><div className="tf-mono text-3xl font-bold">{r.speed.netCpm}</div><div className="tf-h">字/分{newBest && <b className="c-gd ml-1">自己ベスト更新</b>}</div></div>
+              <div className="tf-card2 p-3"><div className="tf-h">正確率</div><div className="tf-mono text-3xl font-bold" style={{ color: r.totals.accuracy >= 97 ? 'var(--gr)' : r.totals.accuracy >= 90 ? 'var(--gd)' : 'var(--sh)' }}>{r.totals.accuracy}<span className="text-base">%</span></div><div className="tf-h">精度 {r.accGrade.id}・{r.accGrade.label}</div></div>
+              <div className="tf-card2 p-3"><div className="tf-h">総合スコア</div><div className="tf-mono text-3xl font-bold c-gd">{r.score.total}</div><div className="tf-h">/ 1000</div></div>
+              <div className="tf-card2 p-3"><div className="tf-h">誤り</div><div className="tf-mono text-3xl font-bold">{r.totals.dist}<span className="text-base c-mu">字</span></div><div className="tf-h">誤{r.totals.sub} 脱{r.totals.miss} 余{r.totals.extra}</div></div>
+            </div>
+            <div className="mt-3 text-sm c-mu">{r.rank.next ? <>次の <b style={{ color: RANK_COLOR[r.rank.next.id] }}>{r.rank.next.id}</b> まで あと <b className="tf-mono text-[var(--tx)]">{r.rank.toNext}</b> 字/分。</> : '最上位ランクに到達しています。'} 正味速度＝正解した文字数÷分。ローマ字ではなく変換後の日本語文字で判定しています。</div>
+            {!r.reliability.certified && <div className="mt-2 text-xs c-gd flex gap-1.5"><Ic n="warn" s={14} className="shrink-0 mt-0.5" />参考記録の理由：{r.reliability.reasons.join('／')}</div>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-6">
+          <button className="tf-btn tf-btn-main" onClick={onRetry}><Ic n="retry" />もう一度</button>
+          <button className="tf-btn" onClick={onHome}><Ic n="book" />別の文章で練習</button>
+          <button className="tf-btn tf-btn-ai" onClick={runDrill} disabled={!!busy || r.totals.dist === 0}>{busy === 'drill' ? <Spinner /> : <Ic n="spark" />}苦手克服の教材をAIで作る</button>
+          <button className="tf-btn" onClick={() => { navigator.clipboard?.writeText(buildReport(r)).then(() => toast('レポートをコピーしました', 'ok')).catch(() => toast('コピーできませんでした', 'error')); }}><Ic n="copy" />レポートをコピー</button>
+          <button className="tf-btn" onClick={() => window.print()}><Ic n="print" />印刷</button>
+        </div>
+        {err && <div className="mt-3 text-sm c-sh flex gap-2" role="alert"><Ic n="warn" className="mt-0.5" />{err}</div>}
+      </section>
+
+      {/* 判定根拠 */}
+      <section className="tf-card p-5 sm:p-6" aria-labelledby="h-ev">
+        <div className="flex items-center justify-between mb-4"><h2 id="h-ev" className="font-bold text-base flex items-center gap-2"><Ic n="shield" className="c-ai" />この判定の根拠</h2><button className="tf-btn !py-1 !text-xs" onClick={onOpenMethod}>基準表・方式の詳細</button></div>
+        <Evidence r={r} />
+        <div className="mt-5"><div className="tf-h mb-2">ランク基準表（{PROFILES[r.rank.profile].label}）：正味速度 字/分 と、ローマ字換算の目安 打/秒</div><Ladder r={r} /></div>
+      </section>
+
+      {/* 文字種別 */}
+      <section className="grid md:grid-cols-2 gap-5">
+        <div className="tf-card p-5">
+          <h2 className="font-bold text-base mb-3 flex items-center gap-2"><Ic n="target" className="c-gd" />文字の種類ごとの正確さ</h2>
+          <div className="space-y-3">
+            {Object.entries(r.classes).filter(([, v]) => v.total > 0).map(([k, v]) => (
+              <div key={k}><div className="flex justify-between text-xs mb-1"><span>{CLASS_LABEL[k]}</span><span className="tf-mono c-mu">{v.ok}/{v.total}字 <b style={{ color: v.acc >= 97 ? 'var(--gr)' : v.acc >= 90 ? 'var(--gd)' : 'var(--sh)' }}>{v.acc}%</b></span></div><div className="tf-bar"><i style={{ width: `${v.acc}%`, background: v.acc >= 97 ? 'var(--gr)' : v.acc >= 90 ? 'var(--gd)' : 'var(--sh)' }} /></div></div>
+            ))}
+          </div>
+          <p className="tf-h mt-3">お手本に含まれる各文字のうち、正しく入力できた割合です。</p>
+        </div>
+        <div className="tf-card p-5">
+          <h2 className="font-bold text-base mb-3 flex items-center gap-2"><Ic n="chart" className="c-ai" />ペースの安定性</h2>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="tf-card2 p-3"><div className="tf-h">ペース安定度</div><div className="tf-mono text-2xl font-bold">{r.stability ? r.stability.score : '—'}</div><div className="tf-h">{r.stability ? `20秒窓の変動係数 ${r.stability.cv}` : '約80秒以上の入力で算出'}</div></div>
+            <div className="tf-card2 p-3"><div className="tf-h">後半の持続率</div><div className="tf-mono text-2xl font-bold">{r.stamina ? r.stamina.retention + '%' : '—'}</div><div className="tf-h">{r.stamina ? `前半${r.stamina.first}→後半${r.stamina.last}字/分` : '約2分以上の入力で算出'}</div></div>
+          </div>
+          <LineChart data={r.pace} refLine={r.speed.grossCpm} yLabel="入力速度" />
+          <p className="tf-h mt-1">10秒ごとの確定文字数から算出（誤りを含む粗速度）。</p>
+        </div>
+      </section>
+
+      {/* 誤り一覧 */}
+      <section className="tf-card p-5 sm:p-6" aria-labelledby="h-err">
+        <h2 id="h-err" className="font-bold text-base mb-1 flex items-center gap-2"><Ic n="pen" className="c-sh" />間違えた箇所（{r.blocks.length}件）</h2>
+        <p className="tf-h mb-3">お手本と入力が食い違った箇所を、前後の文脈つきで示します。種類は実際の文字の組み合わせから機械的に分類しています。</p>
+        {r.blocks.length === 0 ? <div className="c-gr text-sm py-4">ミスはありません。完璧です。</div> : (
+          <>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              <button className="tf-chip" aria-pressed={kindFilter === 'all'} onClick={() => setKindFilter('all')}>すべて {r.blocks.length}</button>
+              {kinds.map(([k, n]) => (<button key={k} className="tf-chip" aria-pressed={kindFilter === k} onClick={() => setKindFilter(k)}>{k} {n}</button>))}
+            </div>
+            <div className="space-y-1.5">
+              {shown.map((b, i) => (
+                <div key={i} className="tf-card2 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="tf-mono text-[11px] c-mu w-14 shrink-0">区間{b.section}</span>
+                  <span className="tf-serif text-[15px] flex-1 min-w-[200px]"><span className="c-mu">{b.before}</span>
+                    {b.target ? <span className="px-1 mx-0.5 rounded" style={{ background: 'rgba(127,192,138,.16)', color: 'var(--gr)' }}>{b.target}</span> : <span className="c-mu">∅</span>}
+                    <span className="c-mu mx-1">→</span>
+                    {b.input ? <span className="px-1 rounded" style={{ background: 'rgba(232,88,63,.16)', color: 'var(--sh)', textDecoration: 'line-through' }}>{b.input}</span> : <span className="c-sh">（未入力）</span>}
+                    <span className="c-mu">{b.after}</span></span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: 'var(--p3)', color: '#b9c2cf' }}>{b.kind}</span>
+                </div>
+              ))}
+            </div>
+            {blocks.length > 20 && <button className="tf-btn mt-3" onClick={() => setShowAll(!showAll)}>{showAll ? '折りたたむ' : `残り${blocks.length - 20}件を表示`}</button>}
+          </>
+        )}
+      </section>
+
+      {/* 区間別 */}
+      <section className="tf-card p-5 sm:p-6 overflow-x-auto tf-scroll">
+        <h2 className="font-bold text-base mb-3">区間別の記録</h2>
+        <table className="tf-table"><thead><tr><th>区間</th><th>評価字数</th><th>入力字数</th><th>正解</th><th>誤/脱/余</th><th>正確率</th><th>時間</th><th>正味速度</th></tr></thead>
+          <tbody className="tf-mono">{r.sections.map((s) => (<tr key={s.index}><td>#{s.index}{!s.full && <span className="c-mu ml-1">(途中)</span>}</td><td>{s.evalLen}</td><td>{s.inputLen}</td><td className="c-gr">{s.ok}</td><td className={s.sub + s.miss + s.extra ? 'c-sh' : 'c-mu'}>{s.sub}/{s.miss}/{s.extra}</td><td>{s.accuracy}%</td><td>{s.sec != null ? s.sec + '秒' : '—'}</td><td className="font-bold">{s.cpm ?? '—'}</td></tr>))}</tbody></table>
+      </section>
+
+      {/* AIコーチ */}
+      <section className="tf-card p-5 sm:p-6" aria-labelledby="h-coach">
+        <div className="flex items-center justify-between gap-3 mb-1"><h2 id="h-coach" className="font-bold text-base flex items-center gap-2"><Ic n="spark" className="c-ai" />AIコーチの所見</h2>
+          <button className="tf-btn tf-btn-ai" onClick={runCoach} disabled={!!busy}>{busy === 'coach' ? <Spinner /> : <Ic n="spark" />}{coach ? '再分析' : 'Gemini Flashで分析'}</button></div>
+        <p className="tf-h mb-3">上の実測値だけを材料にしたアドバイスです。所見はランクや点数には一切影響しません。</p>
+        {!coach && busy !== 'coach' && <div className="c-mu text-sm py-3">ボタンを押すと、弱点の傾向と今日からできる練習メニューを提案します。</div>}
+        {busy === 'coach' && <div className="c-mu text-sm py-3 flex items-center gap-2"><Spinner />結果を分析しています…</div>}
+        {coach && (
+          <div className="space-y-4 tf-pop">
+            <div><div className="font-bold text-[15px] mb-1">{coach.headline}</div><p className="text-sm c-mu leading-relaxed">{coach.summary}</p></div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="tf-card2 p-4"><div className="font-semibold text-sm mb-2 c-gr">良かった点</div><ul className="space-y-1.5 text-[13px] list-disc pl-4">{coach.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+              <div className="tf-card2 p-4"><div className="font-semibold text-sm mb-2 c-sh">課題</div><ul className="space-y-2 text-[13px]">{coach.weaknesses.map((w, i) => <li key={i}><b>{w.title}</b><div className="c-mu">{w.detail}{w.cause ? `（考えられる原因：${w.cause}）` : ''}</div></li>)}</ul></div>
+            </div>
+            <div className="tf-card2 p-4"><div className="font-semibold text-sm mb-2 c-gd">練習メニュー</div><div className="grid sm:grid-cols-2 gap-3">{coach.drills.map((d, i) => <div key={i} className="text-[13px]"><b>{d.name}</b>{d.minutes ? <span className="tf-mono c-mu ml-2">約{d.minutes}分</span> : null}<div className="c-mu">{d.how}</div></div>)}</div></div>
+            <div className="text-sm"><b className="c-ai">次回の目標：</b>{coach.nextGoal}</div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ============================================================================
+   HISTORY / METHOD / SETTINGS / APP
+   ========================================================================== */
+function HistoryModal({ open, onClose, history, onSelect, onClear }) {
+  const [confirm, setConfirm] = useState(false);
+  const best = history.reduce((m, h) => Math.max(m, h.speed.netCpm), 0);
+  const avgAcc = history.length ? (history.reduce((a, h) => a + h.totals.accuracy, 0) / history.length).toFixed(1) : '—';
+  const trend = [...history].reverse().map((h, i) => ({ t: i + 1, cpm: h.speed.netCpm }));
+  return (
+    <Modal open={open} onClose={onClose} title="練習履歴" wide>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="tf-card2 p-3"><div className="tf-h">記録数</div><div className="tf-mono text-xl font-bold">{history.length}</div></div>
+        <div className="tf-card2 p-3"><div className="tf-h">最高 正味速度</div><div className="tf-mono text-xl font-bold c-gd">{best || '—'}</div></div>
+        <div className="tf-card2 p-3"><div className="tf-h">平均 正確率</div><div className="tf-mono text-xl font-bold c-gr">{avgAcc}{history.length ? '%' : ''}</div></div>
+      </div>
+      {trend.length >= 2 && <div className="mb-4"><div className="tf-h mb-1">正味速度の推移（字/分・古い順）</div><LineChart data={trend} xKey="t" color="#d8b45e" yLabel="正味速度" /></div>}
+      {history.length === 0 ? <div className="c-mu text-sm text-center py-10">まだ記録がありません。</div> : (
+        <div className="overflow-x-auto tf-scroll max-h-[46vh]"><table className="tf-table"><thead><tr><th>教材</th><th>モード</th><th>ランク</th><th>正味速度</th><th>正確率</th><th>スコア</th><th>区分</th><th>日時</th></tr></thead>
+          <tbody className="tf-mono">{history.map((h) => (
+            <tr key={h.id} className="cursor-pointer hover:bg-[var(--p2)]" onClick={() => { onSelect(h); onClose(); }}>
+              <td className="!font-sans max-w-[200px] truncate">{h.title}</td><td className="!font-sans">{MODES[h.mode]?.label}</td>
+              <td className="font-bold" style={{ color: RANK_COLOR[h.rank.id] }}>{h.rank.id}</td><td>{h.speed.netCpm}</td><td>{h.totals.accuracy}%</td><td>{h.score.total}</td>
+              <td className={`!font-sans ${h.reliability.certified ? 'c-gr' : 'c-gd'}`}>{h.reliability.certified ? '認定' : '参考'}</td><td className="c-mu">{fmtDate(h.at)}</td></tr>))}</tbody></table></div>
+      )}
+      {history.length > 0 && <div className="mt-4 flex justify-end">{confirm ? <div className="flex items-center gap-2 text-sm"><span className="c-sh">全履歴を削除しますか？</span><button className="tf-btn" onClick={() => { onClear(); setConfirm(false); }}>削除する</button><button className="tf-btn" onClick={() => setConfirm(false)}>やめる</button></div> : <button className="tf-btn" onClick={() => setConfirm(true)}><Ic n="trash" s={14} />履歴を削除</button>}</div>}
+    </Modal>
+  );
+}
+
+function MethodModal({ open, onClose, profile }) {
+  return (
+    <Modal open={open} onClose={onClose} title="判定のしくみ" wide>
+      <div className="space-y-6 text-[13.5px] leading-relaxed">
+        <section><h3 className="font-bold mb-1.5 c-gd">1. 何を見て正誤を決めるか</h3>
+          <p className="c-mu">IMEで<b className="text-[var(--tx)]">変換・確定された日本語の文字</b>だけを見ます。ローマ字の綴りや打鍵の並びは判定に一切使いません。お手本と入力を1文字（書記素）単位で最適に対応づけ（編集距離）、正解・誤字・脱字・余字に分類します。変換中でまだ確定していない文字は、速度にも正確率にも含めません。</p></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">2. 速度の測り方</h3>
+          <ul className="list-disc pl-5 space-y-1 c-mu"><li><b className="text-[var(--tx)]">正味速度 = 正解した字数 ÷ 計測時間(分)</b>。間違えた文字は速度に加算されません。</li>
+            <li>1分〜20分モード：開始から終了までの実時間。</li><li>自由練習・即死モード：5秒を超える停止を除外した入力時間（読む時間で遅く見えないように）。</li>
+            <li>終了は「最後に文字を確定した時点」。入力後に放置した時間は含まれません。</li></ul></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">3. ランク基準表</h3>
+          <p className="c-mu mb-2">変換後の日本語は、ローマ字入力の約2.6倍の打鍵が必要になる分、「字/分」の数値は他アプリの「打/分」より小さく表れます。下表の「打/秒」はローマ字換算の目安です。</p>
+          <div className="overflow-x-auto tf-scroll"><table className="tf-table"><thead><tr><th>ランク</th>{Object.entries(PROFILES).map(([k, p]) => <th key={k} style={k === profile ? { color: 'var(--gd)' } : null}>{p.label}（字/分）</th>)}<th>標準の打/秒目安</th></tr></thead>
+            <tbody className="tf-mono">{LADDER.map((x, i) => (<tr key={x.id}><td className="!font-sans font-bold" style={{ color: RANK_COLOR[x.id] }}>{x.id} {x.name}</td>{Object.keys(PROFILES).map((k) => <td key={k} style={k === profile ? { color: 'var(--gd)', fontWeight: 700 } : null}>{ladderFor(k)[i].min}以上</td>)}<td className="c-mu">≈{((x.min * REF_KEYS_PER_CHAR) / 60).toFixed(1)}</td></tr>))}</tbody></table></div></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">4. 認定記録と参考記録</h3>
+          <p className="c-mu">正解80字以上・計測30秒以上・正確率85%以上（制限時間モードは時間いっぱいまで測定）を満たすと「認定」、満たさない場合は「参考記録」と表示します。短すぎる測定は統計的に不安定なためです。</p></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">5. 総合スコア（1000点）</h3>
+          <p className="c-mu">速度600点（GOD基準で満点）＋精度300点（正確率85%で0点、100%で満点）＋安定100点（20秒窓の変動係数から算出。約80秒以上の入力が必要。測れない場合は速度と精度を1000点に換算）。</p></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">6. 測れないものは表示しない</h3>
+          <p className="c-mu">変換後の文字からは、どの指で・どのキーを打ったかは分かりません。そのため指別・左右手・キー別の統計は<b className="text-[var(--tx)]">表示しません</b>（推測値で埋めることはしません）。ペース安定度・持続率も、データが足りないときは「—」と表示します。</p></section>
+        <section><h3 className="font-bold mb-1.5 c-gd">7. AIの役割</h3>
+          <p className="c-mu">Gemini Flashは、教材の生成・PDFの文字起こし・テキスト整形・結果へのコメントにだけ使います。<b className="text-[var(--tx)]">正誤判定・速度・ランク・スコアの計算にAIは関与しません</b>（すべて上記の数式による決定的な計算です）。</p></section>
+        <section className="tf-card2 p-4"><h3 className="font-bold mb-2 c-ai">旧バージョンから修正した判定上の問題点</h3>
+          <ul className="list-disc pl-5 space-y-1.5 c-mu">
+            <li><b className="text-[var(--tx)]">速度基準が非現実的</b>：変換後の文字数で最上位に500字/分、中位でも170字/分を要求していた。ローマ字換算に直すと他アプリの最上位級でもDに落ちる設計だった → 基準表を再設計し、換算目安を併記。</li>
+            <li><b className="text-[var(--tx)]">変換中の仮名まで打鍵数に算入</b>していた（変換で消える文字も加算） → 確定後の文字のみ計測。</li>
+            <li><b className="text-[var(--tx)]">計測時間に待機時間が混入</b>（最終入力後の自動送り待ち・停止時間を含む） → 最終確定時点まで、停止は除外。</li>
+            <li><b className="text-[var(--tx)]">正確率が二重定義</b>（入力字数基準と編集距離基準が混在し、脱字が見えない） → 編集距離の1定義に統一。</li>
+            <li><b className="text-[var(--tx)]">速度と精度を二重に罰する段位ゲート</b>（正味速度に二重の減点） → 正味速度でランク、精度は別グレード。</li>
+            <li><b className="text-[var(--tx)]">即死モードが1文字目で終了する不具合</b>（未入力の末尾を脱字と数えていた） → 到達済み範囲のみ評価。</li>
+            <li><b className="text-[var(--tx)]">捏造指標の撤廃</b>：キー別遅延(固定135ms)・ダミーキー補充・左右手バランス・連続正解の仮値・安定度の既定値92・スコアの既定値950など、実測に基づかない数値をすべて削除。</li>
+            <li><b className="text-[var(--tx)]">短時間の過大評価</b>：数十字の測定でも最上位が出せた → 認定/参考の区別を導入。</li>
+          </ul></section>
+      </div>
+    </Modal>
+  );
+}
+
+function SettingsModal({ open, onClose, settings, setSettings, onResetAll }) {
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <Modal open={open} onClose={onClose} title="設定">
+      <div className="space-y-5">
+        <div><div className="tf-h mb-1.5">お手本の文字サイズ</div><Seg label="文字サイズ" value={settings.fontSize} onChange={(v) => setSettings({ ...settings, fontSize: v })} options={[{ v: 'compact', l: '小' }, { v: 'standard', l: '標準' }, { v: 'large', l: '大' }, { v: 'huge', l: '特大' }]} /></div>
+        <div><div className="tf-h mb-1.5">効果音</div><Seg label="効果音" value={settings.sound} onChange={(v) => setSettings({ ...settings, sound: v })} options={[{ v: true, l: 'オン' }, { v: false, l: 'オフ' }]} />
+          {settings.sound && <div className="mt-2 flex items-center gap-3"><span className="tf-h">音量</span><input type="range" min="0.1" max="1" step="0.1" value={settings.volume} onChange={(e) => setSettings({ ...settings, volume: Number(e.target.value) })} aria-label="音量" className="flex-1" /><button className="tf-btn !py-1" onClick={() => sfx.ok(settings.volume)}>試聴</button></div>}</div>
+        <div><div className="tf-h mb-1.5">ランク基準</div><Seg label="ランク基準" value={settings.profile} onChange={(v) => setSettings({ ...settings, profile: v })} options={Object.entries(PROFILES).map(([k, p]) => ({ v: k, l: p.label, t: p.desc }))} /><p className="tf-h mt-1">{PROFILES[settings.profile].desc}</p></div>
+        <div style={{ borderTop: '1px solid var(--ln)' }} className="pt-4">
+          {confirm ? <div className="flex items-center gap-2 text-sm"><span className="c-sh">教材・履歴・設定をすべて削除します。</span><button className="tf-btn" onClick={() => { onResetAll(); setConfirm(false); onClose(); }}>削除する</button><button className="tf-btn" onClick={() => setConfirm(false)}>やめる</button></div>
+            : <button className="tf-btn" onClick={() => setConfirm(true)}><Ic n="trash" s={14} />保存データをすべて削除</button>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+const DEFAULT_SETTINGS = { profile: 'standard', level: 'standard', sectionLen: 200, fontSize: 'standard', sound: true, volume: 0.5 };
+const slimResult = (r) => ({ ...r, sections: r.sections.map(({ segs, ...s }) => s), blocks: r.blocks.slice(0, 60) });
+
+export default function App() {
+  const [settings, setSettingsRaw] = useState(() => ({ ...DEFAULT_SETTINGS, ...store.get('tf_settings', {}) }));
+  const [library, setLibrary] = useState(() => store.get('tf_library', []));
+  const [history, setHistory] = useState(() => store.get('tf_history', []));
+  const [material, setMaterial] = useState(null);
+  const [mode, setMode] = useState('t180');
+  const [view, setView] = useState('home');
+  const [result, setResult] = useState(null);
+  const [sessionKey, setSessionKey] = useState(0);
+  const [modal, setModal] = useState('');
+  const [toasts, setToasts] = useState([]);
+
+  const setSettings = (s) => { setSettingsRaw(s); store.set('tf_settings', s); };
+  useEffect(() => { store.set('tf_library', library); }, [library]);
+  const toast = (msg, kind = 'info') => { const id = uid(); setToasts((t) => [...t, { id, msg, kind }]); setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200); };
+
+  const start = () => { if (!material) return; setSessionKey((k) => k + 1); setView('typing'); };
+  const onFinish = (res) => {
+    const slim = slimResult(res);
+    setResult(slim); setView('result');
+    setHistory((h) => { const n = [slim, ...h].slice(0, 100); store.set('tf_history', n); return n; });
+  };
+  const onDrill = (m) => {
+    const full = { id: uid(), createdAt: new Date().toISOString(), ...m };
+    setMaterial(full); setLibrary((lib) => [full, ...lib].slice(0, 40)); setSessionKey((k) => k + 1); setView('typing'); toast('苦手克服の教材を作成しました', 'ok');
+  };
+  const resetAll = () => { ['tf_settings', 'tf_library', 'tf_history'].forEach(store.del); setSettingsRaw(DEFAULT_SETTINGS); setLibrary([]); setHistory([]); setMaterial(null); setView('home'); toast('保存データを削除しました', 'info'); };
+
+  return (
+    <div className="tf-root">
+      <style>{CSS}</style>
+      <header className="sticky top-0 z-30 print:hidden" style={{ background: 'rgba(13,17,22,.92)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--ln)' }}>
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <button className="flex items-center gap-2.5" onClick={() => view !== 'typing' && setView('home')} aria-label="ホームへ">
+            <span className="tf-serif font-black text-lg w-8 h-8 rounded-md flex items-center justify-center" style={{ background: 'var(--paper)', color: 'var(--ink)' }}>打</span>
+            <span className="text-left leading-tight"><span className="block font-bold text-[15px]">TypingForge</span><span className="block text-[10.5px] c-mu">変換後の文字で判定する日本語タイピング</span></span>
+          </button>
+          <nav className="flex items-center gap-1.5" aria-label="メインメニュー">
+            <button className="tf-btn" onClick={() => setModal('history')}><Ic n="hist" s={15} /><span className="hidden sm:inline">履歴</span></button>
+            <button className="tf-btn" onClick={() => setModal('method')}><Ic n="info" s={15} /><span className="hidden sm:inline">判定基準</span></button>
+            <button className="tf-btn" onClick={() => setModal('settings')}><Ic n="gear" s={15} /><span className="hidden sm:inline">設定</span></button>
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        {view === 'home' && <HomeView material={material} setMaterial={setMaterial} library={library} setLibrary={setLibrary} mode={mode} setMode={setMode} settings={settings} setSettings={setSettings} onStart={start} toast={toast} onOpenMethod={() => setModal('method')} history={history} />}
+        {view === 'typing' && material && <TypingSession key={sessionKey} material={material} mode={mode} settings={settings} onFinish={onFinish} onAbort={() => setView('home')} toast={toast} />}
+        {view === 'result' && result && <ResultView key={result.id} result={result} history={history} settings={settings} onRetry={start} onHome={() => setView('home')} onDrill={onDrill} toast={toast} onOpenMethod={() => setModal('method')} />}
+      </main>
+
+      <HistoryModal open={modal === 'history'} onClose={() => setModal('')} history={history} onSelect={(h) => { setResult(h); setView('result'); }} onClear={() => { store.del('tf_history'); setHistory([]); }} />
+      <MethodModal open={modal === 'method'} onClose={() => setModal('')} profile={settings.profile} />
+      <SettingsModal open={modal === 'settings'} onClose={() => setModal('')} settings={settings} setSettings={setSettings} onResetAll={resetAll} />
+
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[60] flex flex-col gap-2 items-center pointer-events-none" aria-live="polite">
+        {toasts.map((t) => (<div key={t.id} className="tf-card px-4 py-2.5 text-sm tf-pop shadow-xl" style={{ borderColor: t.kind === 'error' ? 'var(--sh)' : t.kind === 'ok' ? 'var(--gr)' : 'var(--ln)' }}>{t.msg}</div>))}
+      </div>
+    </div>
+  );
+}
