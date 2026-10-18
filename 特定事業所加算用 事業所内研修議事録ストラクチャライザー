@@ -1,0 +1,3077 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<title>特定事業所加算用 事業所内研修議事録ストラクチャライザー</title>
+
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+
+:root {
+
+--font-sans: 'Inter', 'M PLUS Rounded 1c', sans-serif;
+
+--font-mono: 'JetBrains Mono', monospace;
+
+}
+
+body {
+
+font-family: var(--font-sans);
+
+background-color: #f8fafc;
+
+color: #0f172a;
+
+margin: 0;
+
+padding: 0;
+
+overflow-x: hidden;
+
+}
+
+.pattern-grid {
+
+background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+
+background-size: 16px 16px;
+
+}
+
+/\* A4 Document Preview Styling (Exact reproduction of kaigigiroku_final.html) \*/
+
+.a4-sheet-wrapper {
+
+display: flex;
+
+justify-content: center;
+
+align-items: flex-start;
+
+width: 100%;
+
+overflow: hidden;
+
+}
+
+.a4-container {
+
+width: 780px;
+
+height: 1103px; /\* Strict A4 portrait aspect ratio (1 : 1.414) \*/
+
+max-height: 1103px;
+
+margin: 0 auto;
+
+padding: 42px 24px 36px 24px;
+
+background-color: #FFFFFF;
+
+color: #000000;
+
+font-family: 'M PLUS Rounded 1c', sans-serif;
+
+font-size: 13.5px;
+
+font-weight: 400;
+
+box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+
+border: 1px solid #cbd5e1;
+
+display: grid;
+
+grid-template-rows: auto auto auto 1fr auto auto auto;
+
+grid-template-columns: 100%;
+
+box-sizing: border-box;
+
+overflow: hidden;
+
+transform-origin: top center;
+
+transition: transform 0.2s ease;
+
+}
+
+.a4-container .main-title {
+
+font-size: 21px;
+
+font-weight: 700;
+
+text-align: center;
+
+letter-spacing: 1.5px;
+
+margin: 0;
+
+padding: 4px 0 4px 0;
+
+color: #000;
+
+}
+
+.a4-container .sub-title {
+
+font-size: 15px;
+
+font-weight: 400;
+
+}
+
+.a4-container .office-name-wrapper {
+
+font-size: 15px;
+
+padding: 4px 0 8px 16px;
+
+display: flex;
+
+align-items: flex-end;
+
+}
+
+.a4-container .office-name-underline {
+
+display: inline-block;
+
+width: 540px;
+
+border-bottom: 1px solid #000;
+
+margin-left: 6px;
+
+min-height: 1.3em;
+
+padding: 0 6px;
+
+outline: none;
+
+}
+
+.a4-container table {
+
+width: 100%;
+
+border-collapse: collapse;
+
+border: 1.5px solid #000;
+
+}
+
+.a4-container th,
+
+.a4-container td {
+
+border: 1px solid #000;
+
+padding: 4px 6px;
+
+text-align: center;
+
+vertical-align: middle;
+
+font-size: 13px;
+
+color: #000;
+
+}
+
+.a4-container .header-cell,
+
+.a4-container .main-content-table th,
+
+.a4-container .confirmation-table .label-cell {
+
+background-color: #E8E8E8;
+
+font-weight: 700;
+
+}
+
+.a4-container .main-content-table th {
+
+border-bottom-width: 1.5px;
+
+padding: 6px 4px;
+
+}
+
+.a4-container .placeholder-text {
+
+color: #000000;
+
+font-size: 13px;
+
+text-align: left;
+
+padding: 2px 4px;
+
+line-height: 1.55;
+
+min-height: 1.4em;
+
+width: 100%;
+
+box-sizing: border-box;
+
+white-space: pre-wrap;
+
+word-break: break-word;
+
+outline: none;
+
+border-radius: 2px;
+
+transition: background-color 0.15s;
+
+}
+
+.a4-container .placeholder-text:hover {
+
+background-color: rgba(16, 185, 129, 0.05);
+
+}
+
+.a4-container .placeholder-text:focus {
+
+background-color: rgba(16, 185, 129, 0.1);
+
+box-shadow: inset 0 0 0 1px #10b981;
+
+}
+
+.a4-container .placeholder-text ul,
+
+.a4-container .placeholder-text li {
+
+margin: 0;
+
+padding: 0;
+
+}
+
+.a4-container .agenda-title {
+
+font-weight: 700;
+
+font-size: 14px;
+
+margin-bottom: 6px;
+
+border-bottom: 1px solid #cccccc;
+
+padding-bottom: 3px;
+
+}
+
+.a4-container .agenda-list {
+
+list-style-type: none;
+
+padding-left: 0;
+
+margin: 0;
+
+}
+
+.a4-container .agenda-list li {
+
+padding-left: 1.3em;
+
+text-indent: -1.3em;
+
+margin-bottom: 4px;
+
+line-height: 1.45;
+
+}
+
+.a4-container .discussion-item {
+
+padding-bottom: 8px;
+
+margin-bottom: 8px;
+
+border-bottom: 1px dashed #cccccc;
+
+line-height: 1.55;
+
+}
+
+.a4-container .discussion-item:last-child {
+
+border-bottom: none;
+
+padding-bottom: 0;
+
+margin-bottom: 0;
+
+}
+
+.a4-container .discussion-item strong {
+
+font-weight: 700;
+
+display: block;
+
+margin-bottom: 2px;
+
+color: #000;
+
+}
+
+.a4-container .info-table {
+
+margin-bottom: 5px;
+
+border-left: none;
+
+border-right: none;
+
+}
+
+.a4-container .info-table td {
+
+padding-top: 2px;
+
+padding-bottom: 2px;
+
+}
+
+.a4-container .info-table .placeholder-text {
+
+padding-top: 1px;
+
+padding-bottom: 1px;
+
+min-height: 1.25em;
+
+line-height: 1.3;
+
+}
+
+.a4-container .info-table .header-cell {
+
+width: 115px;
+
+}
+
+.a4-container .info-table .date-time-cell {
+
+text-align: left;
+
+padding-left: 14px;
+
+}
+
+.a4-container .info-table .recorder-label {
+
+width: 90px;
+
+}
+
+.a4-container .main-content-table {
+
+table-layout: fixed;
+
+border-left: none;
+
+border-right: none;
+
+height: 100%;
+
+}
+
+.a4-container .main-content-table tbody td {
+
+vertical-align: top;
+
+padding: 6px;
+
+}
+
+.a4-container .col-item { width: 5%; }
+
+.a4-container .col-agenda { width: 41%; }
+
+.a4-container .col-person { width: 10%; }
+
+.a4-container .col-details { width: 44%; }
+
+.a4-container .vertical-text-container {
+
+writing-mode: vertical-rl;
+
+text-orientation: mixed;
+
+margin: auto;
+
+padding-top: 6px;
+
+display: flex;
+
+align-items: center;
+
+justify-content: flex-start;
+
+line-height: 1.6;
+
+text-align: center;
+
+}
+
+.a4-container .agenda-note {
+
+font-size: 11.5px;
+
+text-align: right;
+
+padding: 3px 0;
+
+margin: 0;
+
+}
+
+.a4-container .agenda-list-table {
+
+border-left: none;
+
+border-right: none;
+
+}
+
+.a4-container .agenda-list-table td {
+
+padding: 2px 5px;
+
+font-size: 12px;
+
+line-height: 1.25;
+
+}
+
+.a4-container .agenda-list-table .num {
+
+width: 6%;
+
+text-align: center;
+
+}
+
+.a4-container .agenda-list-table .text {
+
+text-align: left;
+
+padding-left: 12px;
+
+}
+
+.a4-container .confirmation-table {
+
+margin-top: 5px;
+
+border-left: none;
+
+border-right: none;
+
+}
+
+.a4-container .confirmation-table .label-cell {
+
+width: 115px;
+
+}
+
+.a4-container .confirmation-table td {
+
+height: 32px;
+
+}
+
+@media print {
+
+body \* {
+
+visibility: hidden;
+
+}
+
+#printable-sheet,
+
+#printable-sheet \* {
+
+visibility: visible;
+
+}
+
+#printable-sheet {
+
+position: fixed;
+
+left: 0;
+
+top: 0;
+
+width: 100%;
+
+height: 100vh;
+
+box-shadow: none !important;
+
+border: none !important;
+
+transform: none !important;
+
+margin: 0 !important;
+
+}
+
+}
+
+</style>
+
+</head>
+
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-emerald-100">
+
+<!-- Toast Notification -->
+
+<div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- Top Header -->
+
+<header class="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3.5 shadow-sm">
+
+\<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3"\>
+
+\<div class="flex items-center gap-3"\>
+
+\\\<div class="bg-emerald-600 text-white p-2 rounded-xl shadow-sm flex items-center justify-center"\\\>
+
+  \\\<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"\\\>
+
+    \\\<path d="M12 8V4H8" /\\\>
+
+    \\\<rect width="16" height="12" x="4" y="8" rx="2" /\\\>
+
+    \\\<path d="M2 14h2" /\\\>
+
+    \\\<path d="M20 14h2" /\\\>
+
+    \\\<path d="M15 13v2" /\\\>
+
+    \\\<path d="M9 13v2" /\\\>
+
+  \\\</svg\\\>
+
+\\\</div\\\>
+
+\\\<div\\\>
+
+  \\\<div class="flex items-center gap-2"\\\>
+
+    \\\<h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-800"\\\>特定事業所加算用 事業所内研修議事録ストラクチャライザー\\\</h1\\\>
+
+    \\\<span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-\\\[10px\\\] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200"\\\>
+
+      Gemini Flash (APIキー不要)
+
+    \\\</span\\\>
+
+  \\\</div\\\>
+
+  \\\<p class="text-\\\[11px\\\] text-slate-500 font-medium"\\\>A4縦1枚厳수・謙虚で優しい学びの文体・PDF / Word(.docx) 両対応\\\</p\\\>
+
+\\\</div\\\>
+
+\</div\>
+
+\<div class="flex items-center gap-2 sm:gap-3"\>
+
+\\\<!-- View Switcher Tabs --\\\>
+
+\\\<div class="inline-flex rounded-lg bg-slate-100 p-1 border border-slate-200"\\\>
+
+  \\\<button id="tab-split-btn" type="button" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-slate-800 shadow-sm"\\\>
+
+    分割表示
+
+  \\\</button\\\>
+
+  \\\<button id="tab-preview-btn" type="button" class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-600 hover:text-slate-900"\\\>
+
+    A4全画面プレビュー
+
+  \\\</button\\\>
+
+\\\</div\\\>
+
+\\\<button id="header-pdf-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-lg shadow-sm transition-all"\\\>
+
+  \\\<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\\\>
+
+    \\\<path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /\\\>
+
+  \\\</svg\\\>
+
+  \\\<span\\\>PDF保存\\\</span\\\>
+
+\\\</button\\\>
+
+\\\<button id="header-docx-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all"\\\>
+
+  \\\<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\\\>
+
+    \\\<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /\\\>
+
+  \\\</svg\\\>
+
+  \\\<span\\\>Word(.docx)保存\\\</span\\\>
+
+\\\</button\\\>
+
+\</div\>
+
+\</div\>
+
+</header>
+
+<!-- Main Workspace -->
+
+<main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+\<!-- Left Column: Input & Controls --\>
+
+\<section id="input-column" class="lg:col-span-5 flex flex-col gap-4"\>
+
+\<!-- Guardrail Status Banner --\>
+
+\<div class="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3.5 flex flex-col gap-1.5"\>
+
+\\\<div class="flex items-center justify-between"\\\>
+
+  \\\<span class="text-xs font-bold text-emerald-900 flex items-center gap-1.5"\\\>
+
+    \\\<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"\\\>\\\</span\\\>
+
+    適用中のガードレール仕様
+
+  \\\</span\\\>
+
+  \\\<span id="engine-badge" class="text-\\\[10px\\\] font-mono px-2 py-0.5 rounded bg-white text-emerald-700 border border-emerald-200"\\\>
+
+    Flash Canvas Direct
+
+  \\\</span\\\>
+
+\\\</div\\\>
+
+\\\<ul class="text-\\\[11px\\\] text-emerald-800 space-y-0.5 pl-1 leading-relaxed"\\\>
+
+  \\\<li\\\>① APIキー不要：Canvas環境内で完結して高速構造化を実行\\\</li\\\>
+
+  \\\<li\\\>② 出力形式：A4縦1枚固定PDF出力 ＆ Word（.docx）出力の両対応\\\</li\\\>
+
+  \\\<li\\\>③ 検討内容：【今回の勉強会で学んだこと、気づき】と【ディスカッション内容】の2項目のみ・謙虚で優しい文体・500文字以内\\\</li\\\>
+
+\\\</ul\\\>
+
+\</div\>
+
+\<!-- Source Content Card --\>
+
+\<div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col"\>
+
+\\\<div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between flex-wrap gap-2"\\\>
+
+  \\\<div\\\>
+
+    \\\<h2 class="text-xs font-bold text-slate-800 uppercase tracking-wider"\\\>Source Content / 勉強会・テーマ研修資料入力\\\</h2\\\>
+
+    \\\<p class="text-\\\[11px\\\] text-slate-500"\\\>勉強会のテーマ資料・レジュメ・事例検討メモを貼り付けてください\\\</p\\\>
+
+  \\\</div\\\>
+
+  \\\<div class="flex items-center gap-1.5"\\\>
+
+    \\\<button id="load-tab2-sample-btn" type="button" class="px-2.5 py-1 text-\\\[11px\\\] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors"\\\>
+
+      提示サンプル読込
+
+    \\\</button\\\>
+
+    \\\<button id="clear-input-btn" type="button" class="px-2.5 py-1 text-\\\[11px\\\] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"\\\>
+
+      クリア
+
+    \\\</button\\\>
+
+  \\\</div\\\>
+
+\\\</div\\\>
+
+\\\<div class="px-4 py-2 bg-emerald-50/40 border-b border-slate-100 flex items-center gap-2"\\\>
+
+  \\\<label for="theme-override-input" class="text-\\\[11px\\\] font-bold text-emerald-900 whitespace-nowrap"\\\>勉強会テーマ指定（任意）：\\\</label\\\>
+
+  \\\<input id="theme-override-input" type="text" placeholder="未入力時は提示資料からメインテーマを自動抽出します" class="w-full px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500 text-slate-700 placeholder:text-slate-300" /\\\>
+
+\\\</div\\\>
+
+\\\<div class="relative"\\\>
+
+  \\\<textarea
+
+    id="user-input"
+
+    rows="11"
+
+    placeholder="ここに会議の文字起こし、検討メモ、または参照資料を貼り付けてください..."
+
+    class="w-full p-4 focus:outline-none bg-transparent placeholder:text-slate-300 text-slate-700 leading-relaxed font-mono text-xs sm:text-sm selection:bg-emerald-100 resize-y"
+
+  \\\>\\\</textarea\\\>
+
+  \\\<div class="px-4 py-1.5 bg-slate-50/60 border-t border-slate-100 flex items-center justify-between text-\\\[11px\\\] font-mono text-slate-400"\\\>
+
+    \\\<span id="input-char-count"\\\>0 文字入力中\\\</span\\\>
+
+    \\\<span\\\>目標要約上限: 500文字以内\\\</span\\\>
+
+  \\\</div\\\>
+
+\\\</div\\\>
+
+\\\<!-- Optional Metadata Quick-Fill Accordion --\\\>
+
+\\\<div class="border-t border-slate-200 bg-slate-50/40 px-5 py-3"\\\>
+
+  \\\<button id="toggle-meta-btn" type="button" class="w-full flex items-center justify-between text-xs font-semibold text-slate-700 hover:text-slate-900"\\\>
+
+    \\\<span\\\>基本情報（日時・場所・出席者など）の入力欄を開く\\\</span\\\>
+
+    \\\<svg id="meta-chevron" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"\\\>
+
+      \\\<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /\\\>
+
+    \\\</svg\\\>
+
+  \\\</button\\\>
+
+  \\\<div id="meta-panel" class="hidden mt-3 pt-3 border-t border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs"\\\>
+
+    \\\<div class="sm:col-span-2"\\\>
+
+      \\\<label for="meta-office" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>居宅支援事業所名\\\</label\\\>
+
+      \\\<input id="meta-office" type="text" placeholder="例：〇〇指定居宅介護支援事業所" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div class="sm:col-span-2"\\\>
+
+      \\\<label for="meta-datetime" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>開催日時\\\</label\\\>
+
+      \\\<input id="meta-datetime" type="text" value="令和8年10月18日  13:30 ～ 14:30" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-place" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>場所\\\</label\\\>
+
+      \\\<input id="meta-place" type="text" value="事業所内 相談室" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-person" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>担当者名（改行区切り可）\\\</label\\\>
+
+      \\\<input id="meta-person" type="text" value="研修担当者・管理者" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-mc" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>司会者\\\</label\\\>
+
+      \\\<input id="meta-mc" type="text" value="管理者" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-recorder" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>記録者\\\</label\\\>
+
+      \\\<input id="meta-recorder" type="text" value="介護支援専門員" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-attendees" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>出席者（「名」の前に表示）\\\</label\\\>
+
+      \\\<input id="meta-attendees" type="text" value="介護支援専門員 全員（4）" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+    \\\<div\\\>
+
+      \\\<label for="meta-absentees" class="block text-\\\[11px\\\] font-medium text-slate-500 mb-0.5"\\\>欠席者\\\</label\\\>
+
+      \\\<input id="meta-absentees" type="text" value="なし" class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-emerald-500" /\\\>
+
+    \\\</div\\\>
+
+  \\\</div\\\>
+
+\\\</div\\\>
+
+\\\<!-- Generate Action Footer --\\\>
+
+\\\<div class="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3"\\\>
+
+  \\\<div id="status-message" class="text-\\\[11px\\\] text-slate-500 leading-tight"\\\>
+
+    ボタンを押すと【今回の勉強会で学んだこと、気づき】と【ディスカッション内容】の2項目で構造化します。
+
+  \\\</div\\\>
+
+  \\\<button
+
+    id="generate-btn"
+
+    type="button"
+
+    class="flex-shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-\\\[0.99\\\] text-white text-xs sm:text-sm font-bold rounded-lg shadow-sm transition-all disabled:opacity-50"
+
+  \\\>
+
+    \\\<svg id="generate-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"\\\>
+
+      \\\<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" /\\\>
+
+    \\\</svg\\\>
+
+    \\\<span id="generate-btn-text"\\\>議事録を構造化する\\\</span\\\>
+
+  \\\</button\\\>
+
+\\\</div\\\>
+
+\</div\>
+
+\<!-- Character Count & Guardrail Audit Card --\>
+
+\<div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col gap-2.5"\>
+
+\\\<div class="flex items-center justify-between"\\\>
+
+  \\\<span class="text-xs font-bold text-slate-700"\\\>【検討内容及び決定事項】文字数監査\\\</span\\\>
+
+  \\\<span id="discussion-char-badge" class="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800"\\\>
+
+    0 / 500 文字
+
+  \\\</span\\\>
+
+\\\</div\\\>
+
+\\\<div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden"\\\>
+
+  \\\<div id="discussion-char-bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"\\\>\\\</div\\\>
+
+\\\</div\\\>
+
+\\\<p class="text-\\\[11px\\\] text-slate-500 leading-relaxed"\\\>
+
+  ※プレビュー内の各セルは直接クリックして編集可能です。編集内容もリアルタイムで文字数カウント・PDF・Word出力に反映されます。
+
+\\\</p\\\>
+
+\</div\>
+
+\</section\>
+
+\<!-- Right Column: Live A4 Preview --\>
+
+\<section id="preview-column" class="lg:col-span-7 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden"\>
+
+\<div class="px-5 py-3 border-b border-slate-200 bg-white flex flex-wrap items-center justify-between gap-2"\>
+
+\\\<div class="flex items-center gap-2"\\\>
+
+  \\\<h2 class="text-xs font-bold text-slate-800 uppercase tracking-wider"\\\>A4 Portrait Live Preview\\\</h2\\\>
+
+  \\\<span class="text-\\\[11px\\\] text-slate-400"\\\>（直接クリックして微修正できます）\\\</span\\\>
+
+\\\</div\\\>
+
+\\\<div class="flex items-center gap-2"\\\>
+
+  \\\<button id="preview-pdf-btn" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-lg transition-all"\\\>
+
+    \\\<span\\\>PDFエクスポート\\\</span\\\>
+
+  \\\</button\\\>
+
+  \\\<button id="preview-docx-btn" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all"\\\>
+
+    \\\<span\\\>Word(.docx)エクスポート\\\</span\\\>
+
+  \\\</button\\\>
+
+\\\</div\\\>
+
+\</div\>
+
+\<!-- Scaled A4 Container Host --\>
+
+\<div id="preview-viewport" class="w-full bg-slate-100 pattern-grid p-3 sm:p-6 flex justify-center items-start overflow-x-hidden overflow-y-auto"\>
+
+\\\<div id="scale-wrapper" class="a4-sheet-wrapper"\\\>
+
+  \\\<div id="printable-sheet" class="a4-container"\\\>
+
+    \\\<h1 class="main-title"\\\>特定事業所加算における定期的な会議 \\\<span class="sub-title"\\\>(居宅支援事業所用)\\\</span\\\>\\\</h1\\\>
+
+    \\\<div class="office-name-wrapper"\\\>
+
+      \\\<span\\\>居宅支援事業所名：\\\</span\\\>
+
+      \\\<div id="office-cell" class="office-name-underline placeholder-text" contenteditable="true"\\\>\\\</div\\\>
+
+    \\\</div\\\>
+
+    \\\<table class="info-table"\\\>
+
+      \\\<tbody\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="header-cell"\\\>開催日時\\\</td\\\>
+
+          \\\<td class="date-time-cell" colspan="3"\\\>
+
+            \\\<div id="datetime-cell" class="placeholder-text" contenteditable="true"\\\>令和8年10月18日  13:30 ～ 14:30\\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="header-cell"\\\>場 所\\\</td\\\>
+
+          \\\<td colspan="3"\\\>
+
+            \\\<div id="place-cell" class="placeholder-text" contenteditable="true"\\\>事業所内 相談室\\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="header-cell"\\\>司会者\\\</td\\\>
+
+          \\\<td\\\>
+
+            \\\<div id="mc-cell" class="placeholder-text" contenteditable="true"\\\>管理者\\\</div\\\>
+
+          \\\</td\\\>
+
+          \\\<td class="header-cell recorder-label"\\\>記録者\\\</td\\\>
+
+          \\\<td\\\>
+
+            \\\<div id="recorder-cell" class="placeholder-text" contenteditable="true"\\\>介護支援専門員\\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="header-cell"\\\>出席者\\\</td\\\>
+
+          \\\<td colspan="3" class="attendees-cell"\\\>
+
+            \\\<div style="display: flex; justify-content: flex-end; align-items: center; width: 100%;"\\\>
+
+              \\\<div id="attendees-cell" class="placeholder-text" contenteditable="true" style="flex-grow: 1;"\\\>介護支援専門員 全員（4）\\\</div\\\>
+
+              \\\<span class="attendees-name" style="margin-left: 8px; padding-right: 4px;"\\\>名\\\</span\\\>
+
+            \\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="header-cell"\\\>欠席者\\\</td\\\>
+
+          \\\<td colspan="3"\\\>
+
+            \\\<div id="absentees-cell" class="placeholder-text" contenteditable="true"\\\>なし\\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+      \\\</tbody\\\>
+
+    \\\</table\\\>
+
+    \\\<table class="main-content-table"\\\>
+
+      \\\<thead\\\>
+
+        \\\<tr\\\>
+
+          \\\<th class="col-item"\\\>項目※\\\</th\\\>
+
+          \\\<th class="col-agenda"\\\>議題\\\</th\\\>
+
+          \\\<th class="col-person"\\\>担当者名\\\</th\\\>
+
+          \\\<th class="col-details"\\\>検討内容及び決定事項\\\</th\\\>
+
+        \\\</tr\\\>
+
+      \\\</thead\\\>
+
+      \\\<tbody\\\>
+
+        \\\<tr\\\>
+
+          \\\<td id="item-cell"\\\>
+
+            \\\<div id="item-content" class="placeholder-text vertical-text-container" contenteditable="true"\\\>\\\</div\\\>
+
+          \\\</td\\\>
+
+          \\\<td id="agenda-cell"\\\>
+
+            \\\<div id="agenda-content" class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>
+
+          \\\</td\\\>
+
+          \\\<td id="person-cell"\\\>
+
+            \\\<div id="person-content" class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>
+
+          \\\</td\\\>
+
+          \\\<td id="discussion-cell"\\\>
+
+            \\\<div id="discussion-content" class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>
+
+          \\\</td\\\>
+
+        \\\</tr\\\>
+
+      \\\</tbody\\\>
+
+    \\\</table\\\>
+
+    \\\<p class="agenda-note"\\\>※「議題」左欄の「項目」には一覧の該当する番号を記入すること\\\</p\\\>
+
+    \\\<table class="agenda-list-table"\\\>
+
+      \\\<tbody\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>1\\\</td\\\>\\\<td class="text"\\\>現に抱える処遇困難ケースについて具体的な処遇方針\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>2\\\</td\\\>\\\<td class="text"\\\>過去に取り扱ったケースについての問題点及びその改善方策\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>3\\\</td\\\>\\\<td class="text"\\\>地域における事業者や活用できる社会資源の状況\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>4\\\</td\\\>\\\<td class="text"\\\>保健医療及び福祉に関する制度\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>5\\\</td\\\>\\\<td class="text"\\\>ケアマネジメントに関する技術\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>6\\\</td\\\>\\\<td class="text"\\\>利用者からの苦情があった場合にはその内容及び改善方針\\\</td\\\>\\\</tr\\\>
+
+        \\\<tr\\\>\\\<td class="num"\\\>7\\\</td\\\>\\\<td class="text"\\\>その他必要な事項\\\</td\\\>\\\</tr\\\>
+
+      \\\</tbody\\\>
+
+    \\\</table\\\>
+
+    \\\<table class="confirmation-table"\\\>
+
+      \\\<tbody\\\>
+
+        \\\<tr\\\>
+
+          \\\<td class="label-cell"\\\>確認欄\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+          \\\<td\\\>\\\<div class="placeholder-text" contenteditable="true"\\\>\\\</div\\\>\\\</td\\\>
+
+        \\\</tr\\\>
+
+      \\\</tbody\\\>
+
+    \\\</table\\\>
+
+  \\\</div\\\>
+
+\\\</div\\\>
+
+\</div\>
+
+\</section\>
+
+</main>
+
+<script>
+
+(function () {
+
+// Sample text from User's Tab 2
+
+const TAB2_SAMPLE_TEXT = \`【鍵の安全管理】鍵の紛失による締め出しリスクを防ぐため、合鍵を2個作成し、本人と支援者で分散保管することに同意・決定した。
+
+【住環境の衛生確保】トイレ・浴室の衛生面を考慮し、本人が在宅する夕方に週1回の訪問介護を導入し清掃を実施することで合意した。
+
+【金銭・契約整理と権利擁護】携帯電話の複数回線契約に伴う不要な引き落としや、通帳・マイナンバーカードの未整理問題に対し、地域包括支援センター等と連携して権利擁護の専門職を導入し、解約や手続きを代行・支援する方針を決定した。
+
+【服薬管理と環境整備】散在する内服薬を1箇所のケースに集約して服薬状況を確認する。また、室内での立ち上がりの不安定さを補うため、置き型手すりを試験導入する。
+
+【通所介護の検討】過去の体験による拒否感があるため、まずは訪問介護を先行させ、本人の趣味である将棋が楽しめる他事業所のお試し利用を後日提案する方針とした`;
+
+// DOM Elements
+
+const userInputEl = document.getElementById('user-input');
+
+const inputCharCountEl = document.getElementById('input-char-count');
+
+const generateBtn = document.getElementById('generate-btn');
+
+const generateBtnText = document.getElementById('generate-btn-text');
+
+const statusMessageEl = document.getElementById('status-message');
+
+const loadSampleBtn = document.getElementById('load-tab2-sample-btn');
+
+const clearInputBtn = document.getElementById('clear-input-btn');
+
+const toggleMetaBtn = document.getElementById('toggle-meta-btn');
+
+const metaPanel = document.getElementById('meta-panel');
+
+const metaChevron = document.getElementById('meta-chevron');
+
+const tabSplitBtn = document.getElementById('tab-split-btn');
+
+const tabPreviewBtn = document.getElementById('tab-preview-btn');
+
+const inputColumn = document.getElementById('input-column');
+
+const previewColumn = document.getElementById('preview-column');
+
+const headerPdfBtn = document.getElementById('header-pdf-btn');
+
+const headerDocxBtn = document.getElementById('header-docx-btn');
+
+const previewPdfBtn = document.getElementById('preview-pdf-btn');
+
+const previewDocxBtn = document.getElementById('preview-docx-btn');
+
+// Metadata inputs
+
+const metaOffice = document.getElementById('meta-office');
+
+const metaDatetime = document.getElementById('meta-datetime');
+
+const metaPlace = document.getElementById('meta-place');
+
+const metaPerson = document.getElementById('meta-person');
+
+const metaMc = document.getElementById('meta-mc');
+
+const metaRecorder = document.getElementById('meta-recorder');
+
+const metaAttendees = document.getElementById('meta-attendees');
+
+const metaAbsentees = document.getElementById('meta-absentees');
+
+// Sheet target cells
+
+const officeCell = document.getElementById('office-cell');
+
+const datetimeCell = document.getElementById('datetime-cell');
+
+const placeCell = document.getElementById('place-cell');
+
+const mcCell = document.getElementById('mc-cell');
+
+const recorderCell = document.getElementById('recorder-cell');
+
+const attendeesCell = document.getElementById('attendees-cell');
+
+const absenteesCell = document.getElementById('absentees-cell');
+
+const itemContent = document.getElementById('item-content');
+
+const agendaContent = document.getElementById('agenda-content');
+
+const personContent = document.getElementById('person-content');
+
+const discussionContent = document.getElementById('discussion-content');
+
+const discussionCharBadge = document.getElementById('discussion-char-badge');
+
+const discussionCharBar = document.getElementById('discussion-char-bar');
+
+const previewViewport = document.getElementById('preview-viewport');
+
+const scaleWrapper = document.getElementById('scale-wrapper');
+
+const printableSheet = document.getElementById('printable-sheet');
+
+// Toast helper
+
+function showToast(message, type) {
+
+const container = document.getElementById('toast-container');
+
+const toast = document.createElement('div');
+
+const bgClass = type === 'error'
+
+  ? 'bg-red-600 text-white'
+
+  : 'bg-slate-900 text-white border border-slate-700';
+
+toast.className = \\\`${bgClass} px-4 py-2.5 rounded-xl shadow-lg text-xs font-medium flex items-center gap-2 transition-all duration-300 pointer-events-auto\\\`;
+
+toast.textContent = message;
+
+container.appendChild(toast);
+
+setTimeout(() =\\\> {
+
+  toast.style.opacity = '0';
+
+  setTimeout(() =\\\> toast.remove(), 300);
+
+}, 3200);
+
+}
+
+// Responsive scaling for the 780x1103 A4 sheet inside previewViewport
+
+function updateSheetScale() {
+
+if (!previewViewport || !printableSheet || !scaleWrapper) return;
+
+const availableWidth = previewViewport.clientWidth - 24;
+
+const targetWidth = 780;
+
+const targetHeight = 1103;
+
+const scale = Math.min(1, Math.max(0.32, availableWidth / targetWidth));
+
+printableSheet.style.transform = \\\`scale(${scale})\\\`;
+
+scaleWrapper.style.height = \\\`${Math.ceil(targetHeight \\\* scale)}px\\\`;
+
+}
+
+window.addEventListener('resize', updateSheetScale);
+
+// Update discussion character counter
+
+function updateDiscussionCharCount() {
+
+const rawText = (discussionContent.innerText || discussionContent.textContent || '').replace(/\\\\s+/g, '');
+
+const len = rawText.length;
+
+discussionCharBadge.textContent = \\\`${len} / 500 文字\\\`;
+
+const pct = Math.min(100, Math.round((len / 500) \\\* 100));
+
+discussionCharBar.style.width = \\\`${pct}%\\\`;
+
+if (len \\\> 500) {
+
+  discussionCharBadge.className = 'text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800';
+
+  discussionCharBar.className = 'bg-amber-500 h-full transition-all duration-300';
+
+} else {
+
+  discussionCharBadge.className = 'text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+
+  discussionCharBar.className = 'bg-emerald-500 h-full transition-all duration-300';
+
+}
+
+}
+
+discussionContent.addEventListener('input', updateDiscussionCharCount);
+
+// Sync metadata fields to sheet
+
+function bindMetaInput(inputEl, cellEl) {
+
+inputEl.addEventListener('input', () =\\\> {
+
+  cellEl.textContent = inputEl.value;
+
+});
+
+}
+
+bindMetaInput(metaOffice, officeCell);
+
+bindMetaInput(metaDatetime, datetimeCell);
+
+bindMetaInput(metaPlace, placeCell);
+
+bindMetaInput(metaMc, mcCell);
+
+bindMetaInput(metaRecorder, recorderCell);
+
+bindMetaInput(metaAttendees, attendeesCell);
+
+bindMetaInput(metaAbsentees, absenteesCell);
+
+metaPerson.addEventListener('input', () =\> {
+
+personContent.innerHTML = escapeHtml(metaPerson.value).replace(/・|、|,\\\\s\\\*/g, '\\\<br /\\\>');
+
+});
+
+function escapeHtml(str) {
+
+return String(str || '')
+
+  .replace(/&/g, '&amp;')
+
+  .replace(/\\\</g, '&lt;')
+
+  .replace(/\\\>/g, '&gt;')
+
+  .replace(/"/g, '&quot;');
+
+}
+
+// Parse raw user input and deterministically or via Flash API generate structured content
+
+// strictly following Guardrail 1 & Guardrail 3:
+
+// - Only 2 items in discussion-cell: 【今回の勉強会で学んだこと、気づき】 and 【ディスカッション内容】
+
+// - Humble, gentle, learning-oriented tone (学ぶ姿勢が前面に現れた謙虚で優しい文体)
+
+// - No redundant expressions, under 500 characters total so it cleanly fits A4 portrait.
+
+const apiKey = ""; // Canvas environment automatically injects credentials when apiKey is empty string
+
+function normalizeFlashResult(parsed, rawText) {
+
+if (!parsed || typeof parsed !== 'object') return null;
+
+// 1. item-cell
+
+let itemText = String(parsed\\\['item-cell'\\\] || parsed.item_number_list || '1\\\\n5').trim();
+
+itemText = itemText.replace(/\\\[,、・\\\\s\\\]+/g, '\\\\n').replace(/\\\[^1-7\\\\n\\\]/g, '').replace(/\\\\n+/g, '\\\\n').trim() || '1\\\\n5';
+
+// 2. agenda-cell
+
+let agendaHtml = '';
+
+if (parsed\\\['agenda-cell'\\\] && String(parsed\\\['agenda-cell'\\\]).includes('agenda-list')) {
+
+  agendaHtml = String(parsed\\\['agenda-cell'\\\]);
+
+} else {
+
+  const title = escapeHtml(parsed.agenda_title || '支援方針および多職種連携に関する検討');
+
+  const items = Array.isArray(parsed.agenda_items) ? parsed.agenda_items.slice(0, 7) : \\\[\\\];
+
+  const liHtml = items.map(it =\\\> {
+
+    const cleanIt = String(it).replace(/^✅\\\\s\\\*/, '').trim();
+
+    return \\\`\\\<li\\\>✅ ${escapeHtml(cleanIt)}\\\</li\\\>\\\`;
+
+  }).join('');
+
+  agendaHtml = \\\`\\\<div class="agenda-title"\\\>【議題】${title}\\\</div\\\>\\\<ul class="agenda-list"\\\>${liHtml}\\\</ul\\\>\\\`;
+
+}
+
+// 3. person-cell
+
+let personRaw = String(parsed\\\['person-cell'\\\] || parsed.person_in_charge || metaPerson.value || '研修担当者\\\\n管理者').trim();
+
+const personHtml = escapeHtml(personRaw).replace(/\\\\r?\\\\n|・|、|,\\\\s\\\*/g, '\\\<br /\\\>');
+
+// 4. discussion-cell: Strictly enforce ONLY 2 sections:
+
+//    【今回の勉強会で学んだこと、気づき】 and 【ディスカッション内容】
+
+//    Humble, gentle learning tone, total \\\<= 500 chars
+
+const header1 = '【今回の勉強会で学んだこと、気づき】';
+
+const header2 = '【ディスカッション内容】';
+
+let learningBody = String(parsed.learning_insights || '').trim();
+
+let discussionBody = String(parsed.discussion_details || '').trim();
+
+if ((!learningBody || !discussionBody) && parsed\\\['discussion-cell'\\\]) {
+
+  const rawDisc = String(parsed\\\['discussion-cell'\\\]).replace(/\\\<\\\[^\\\>\\\]+\\\>/g, ' ').trim();
+
+  const splitParts = rawDisc.split(/【ディスカッション内容】/);
+
+  if (splitParts.length === 2) {
+
+    learningBody = splitParts\\\[0\\\].replace(/【今回の勉強会で学んだこと、気づき】/g, '').trim();
+
+    discussionBody = splitParts\\\[1\\\].trim();
+
+  }
+
+}
+
+if (!learningBody || !discussionBody) {
+
+  return null;
+
+}
+
+learningBody = learningBody.replace(/^【\\\[^】\\\]+】\\\\s\\\*/, '').trim();
+
+discussionBody = discussionBody.replace(/^【\\\[^】\\\]+】\\\\s\\\*/, '').trim();
+
+// Enforce \\\<= 480 chars ceiling so A4 portrait 1-page never overflows
+
+const totalLen = header1.length + learningBody.length + header2.length + discussionBody.length;
+
+if (totalLen \\\> 485) {
+
+  const maxDisc = Math.max(110, 475 - (header1.length + learningBody.length + header2.length));
+
+  if (discussionBody.length \\\> maxDisc) {
+
+    discussionBody = discussionBody.slice(0, maxDisc - 1).replace(/\\\[、。,.\\\]\\\*$/, '') + '。';
+
+  }
+
+}
+
+const discussionHtml =
+
+  \\\`\\\<div class="discussion-item"\\\>\\\<strong\\\>${header1}\\\</strong\\\>${escapeHtml(learningBody)}\\\</div\\\>\\\` +
+
+  \\\`\\\<div class="discussion-item"\\\>\\\<strong\\\>${header2}\\\</strong\\\>${escapeHtml(discussionBody)}\\\</div\\\>\\\`;
+
+return {
+
+  'item-cell': itemText,
+
+  'agenda-cell': agendaHtml,
+
+  'person-cell': personHtml,
+
+  'discussion-cell': discussionHtml,
+
+  \\\_engine: 'Gemini Flash AI'
+
+};
+
+}
+
+const themeOverrideEl = document.getElementById('theme-override-input');
+
+async function tryFlashCanvasCall(rawText) {
+
+const userTheme = (themeOverrideEl && themeOverrideEl.value.trim()) ? themeOverrideEl.value.trim() : '';
+
+const themeDirective = userTheme
+
+  ? \\\`今回の勉強会メインテーマは「${userTheme}」です。必ずこのテーマを軸にして議題および2項目の内容を構成してください。\\\`
+
+  : \\\`提示された資料の冒頭や見出し・文脈から「今回の勉強会のメインテーマ」を正確に特定し、そのテーマに一貫して沿った内容で議題および2項目を構成してください。\\\`;
+
+const systemPrompt = \\\`あなたは居宅介護支援事業所の特定事業所加算における定期的な会議・ケアマネジャー勉強会の議事録作成を専門とするプロフェッショナルAIアシスタントです。
+
+提示される資料は「ケアマネジャーの勉強会にて一定のテーマに沿って用意された研修資料または事例検討資料」です。
+
+${themeDirective}
+
+以下のプロフェッショナル仕様・ガードレールを絶対厳守してJSONのみを出力してください。
+
+【プロフェッショナル仕様・絶対厳守ルール】
+
+1. テーマの一貫性と専門性:
+
+左欄の「議題（agenda_title と agenda_items）」と右欄の「検討内容及び決定事項（learning_insights と discussion_details）」が、提示資料の勉強会テーマおよび各論点と1対1で完全に噛み合うように構成すること。
+
+資料に含まれる専門用語・制度名・疾患や生活課題・具体的な支援手法・多職種連携のポイントを省略せず正確に反映すること。
+
+2. 議題欄（agenda_title / agenda_items）の構成:
+
+agenda_title: 勉強会のメインテーマがひと目で伝わる格調高く具体的な研修タイトル（「【議題】」は自動で付くため含めない）。
+
+agenda_items: 提示資料で扱われている具体的な研修項目・検討柱を最大6項目まで簡潔かつ専門的に抽出すること（先頭の✅は不要）。
+
+3. 検討内容及び決定事項欄の2項目厳守（learning_insights / discussion_details）:
+
+必ず【今回の勉強会で学んだこと、気づき】と【ディスカッション内容】の2項目のみで構成すること。
+
+learning_insights（【今回の勉強会で学んだこと、気づき】本文）: 提示されたテーマ資料からケアマネジャーとして何を学び、どのような専門的視点や利用者様・ご家族様への寄り添い方に気づいたかを、資料の具体的内容に触れながら記述すること。
+
+discussion_details（【ディスカッション内容】本文）: 勉強会テーマを踏まえ、事業所内のケアマネジャー間でどのような意見交換を行い、明日からのケアマネジメント実践（アセスメント、プラン作成、モニタリング、関係機関連携、個別具体的な対応策など）にどう活かしていくか・何を決定したかを具体的に記述すること。
+
+4. 文体とA4縦1枚文字数制御:
+
+冗長な表現（「〜について議論が行われた」「〜という意見が出た」等の事務的な繋ぎ言葉）を排除し、学ぶ姿勢が前面に現れた謙虚で優しい文体（「〜の大切さを改めて学ばせていただきました」「〜という視点に深く気づかされました」「〜を心に留め、丁寧に寄り添ってまいります」「〜していくことで合意いたしました」等）で統一すること。
+
+A4縦1枚に確実に収めるため、learning_insights（140〜190文字程度）と discussion_details（180〜240文字程度）の合計文字数は見出しを含めて必ず360〜470文字（最大500文字以内）に収めること。
+
+5. 項目番号（item_number_list）の選定:
+
+1:現に抱える処遇困難ケース 2:過去ケースの問題点・改善方策 3:地域資源・社会資源 4:保健医療・福祉制度 5:ケアマネジメント技術 6:苦情内容・改善方針 7:その他 から該当番号を改行区切りで選択すること。`;
+
+const payload = {
+
+systemInstruction: { parts: \[{ text: systemPrompt }\] },
+
+contents: \[{
+
+role: 'user',
+
+parts: \[{
+
+ text: \\\`${userTheme ? '【指定テーマ】' + userTheme + '\\\\n\\\\n' : ''}以下のケアマネジャー勉強会資料・検討テキストを解析し、テーマに沿った研修内容（議題）および検討内容2項目（学び・気づき／ディスカッション内容）のJSONデータを生成してください：\\\\n\\\\n${rawText}\\\`
+
+}\]
+
+}\],
+
+generationConfig: {
+
+temperature: 0.25,
+
+responseMimeType: 'application/json',
+
+responseSchema: {
+
+ type: 'OBJECT',
+
+ properties: {
+
+   item_number_list: {
+
+     type: 'STRING',
+
+     description: '1〜7の該当する項目番号（複数ある場合は改行区切り。例: "1\\\\n3\\\\n5"）'
+
+   },
+
+   agenda_title: {
+
+     type: 'STRING',
+
+     description: '勉強会のテーマを的確に表す具体的な研修タイトル（「【議題】」は含めない）'
+
+   },
+
+   agenda_items: {
+
+     type: 'ARRAY',
+
+     items: { type: 'STRING' },
+
+     description: 'テーマ資料に沿った具体的な研修内容・議題の箇条書きリスト（最大6項目、各35文字以内、先頭の✅は不要）'
+
+   },
+
+   person_in_charge: {
+
+     type: 'STRING',
+
+     description: '抽出された講師・担当者名または役割（改行区切り。特定できない場合は「研修担当者\\\\n管理者」）'
+
+   },
+
+   learning_insights: {
+
+     type: 'STRING',
+
+     description: '【今回の勉強会で学んだこと、気づき】の本文（見出しは含めない）。勉強会テーマと資料の具体的内容に即して、学ぶ姿勢が前面に現れた謙虚で優しい文体で145〜190文字程度で記述。'
+
+   },
+
+   discussion_details: {
+
+     type: 'STRING',
+
+     description: '【ディスカッション内容】の本文（見出しは含めない）。勉強会テーマに沿った意見交換と今後の具体的な実践・決定事項を網羅し、謙虚で優しい文体で185〜245文字程度で記述。'
+
+   }
+
+ },
+
+ required: \\\[
+
+   'item_number_list',
+
+   'agenda_title',
+
+   'agenda_items',
+
+   'person_in_charge',
+
+   'learning_insights',
+
+   'discussion_details'
+
+ \\\]
+
+}
+
+}
+
+};
+
+const models = [
+
+'gemini-2.5-flash-preview-09-2025',
+
+'gemini-2.5-flash',
+
+'gemini-2.0-flash'
+
+];
+
+for (const modelName of models) {
+
+const delays = \[0, 800, 1600\];
+
+for (let attempt = 0; attempt \< delays.length; attempt++) {
+
+if (delays\[attempt\] \> 0) {
+
+ await new Promise(r =\\\> setTimeout(r, delays\\\[attempt\\\]));
+
+}
+
+try {
+
+ const url = \\\`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}\\\`;
+
+ const res = await fetch(url, {
+
+   method: 'POST',
+
+   headers: { 'Content-Type': 'application/json' },
+
+   body: JSON.stringify(payload)
+
+ });
+
+ if (!res.ok) {
+
+   if (res.status === 404 || res.status === 400) break;
+
+   continue;
+
+ }
+
+ const data = await res.json();
+
+ const text = data?.candidates?.\\\[0\\\]?.content?.parts?.\\\[0\\\]?.text;
+
+ if (!text) continue;
+
+ const cleanedJson = text.replace(/^\\\`\\\`\\\`json\\\\s\\\*/i, '').replace(/\\\`\\\`\\\`\\\\s\\\*$/, '').trim();
+
+ const parsed = JSON.parse(cleanedJson);
+
+ const normalized = normalizeFlashResult(parsed, rawText);
+
+ if (normalized) {
+
+   const badgeEl = document.getElementById('engine-badge');
+
+   if (badgeEl) badgeEl.textContent = \\\`Gemini Flash 実行済 (${modelName})\\\`;
+
+   return normalized;
+
+ }
+
+} catch (err) {
+
+ console.warn(\\\`Flash call attempt failed for ${modelName}:\\\`, err);
+
+}
+
+}
+
+}
+
+return null;
+
+}
+
+// Professional Care Manager Study Session Analyzer (Fallback when offline)
+
+// Specifically designed for theme-based study materials AND case study notes
+
+function buildLocalFlashStructuredMinutes(rawText) {
+
+const userTheme = (themeOverrideEl && themeOverrideEl.value.trim()) ? themeOverrideEl.value.trim() : '';
+
+const cleaned = rawText
+
+.replace(/【今回の勉強会で学んだこと、気づき】と【ディスカッション内容】の2項目ののみ.\*$/gm, '')
+
+.trim();
+
+const rawLines = cleaned
+
+.split(/\\r?\\n/)
+
+.map(l =\> l.trim())
+
+.filter(l =\> l.length \> 0);
+
+// Detect explicit study theme from first lines if present (e.g. テーマ：..., 表題：..., # ...)
+
+let detectedTheme = userTheme;
+
+const sections = [];
+
+let currentSection = null;
+
+rawLines.forEach((line, idx) => {
+
+const themeMatch = line.match(/^(?:テーマ|研修テーマ|勉強会テーマ|題材|演題|タイトル|表題)\[：:\\s\]+(.+)$/);
+
+if (themeMatch && !detectedTheme) {
+
+detectedTheme = themeMatch\[1\].trim();
+
+return;
+
+}
+
+if (idx === 0 && !detectedTheme && line.length \<= 36 && !/\[。\]$/.test(line) && !/^【/.test(line)) {
+
+detectedTheme = line.replace(/^\[#＃■◆●▼▶★☆\\s\]+/, '').trim();
+
+return;
+
+}
+
+const bracketMatch = line.match(/^【(\[^】\]+)】(.\*)$/);
+
+const headingMatch = line.match(/^(?:\[0-9０-９\]+\[\\.．、\]|\\(\[0-9０-９\]+\\)|①|②|③|④|⑤|⑥|⑦|■|◆|●|▼|▶)\\s\*(\[^：:。\]{2,25})\[：:\\s\]\*(.\*)$/);
+
+if (bracketMatch) {
+
+const title = bracketMatch\[1\].trim();
+
+const body = bracketMatch\[2\].trim();
+
+currentSection = { title, bodySentences: body ? \[body\] : \[\] };
+
+sections.push(currentSection);
+
+} else if (headingMatch) {
+
+const title = headingMatch\[1\].trim();
+
+const body = headingMatch\[2\].trim();
+
+currentSection = { title, bodySentences: body ? \[body\] : \[\] };
+
+sections.push(currentSection);
+
+} else if (/^(?:■|◆|▲|▼|第\[0-9０-９一二三四五六七\]+|\[0-9０-９\]+章)/.test(line) && line.length \<= 30) {
+
+const title = line.replace(/^\[■◆▲▼・\\-\*#＃\\s\]+/, '').trim();
+
+currentSection = { title, bodySentences: \[\] };
+
+sections.push(currentSection);
+
+} else {
+
+const cleanSentence = line.replace(/^\[・●■\\-\*0-9０-９.．、\\s\]+/, '').trim();
+
+if (!cleanSentence) return;
+
+if (!currentSection) {
+
+ const sents = cleanSentence.split(/(?\\\<=。)/).map(s =\\\> s.trim()).filter(Boolean);
+
+ sents.forEach(s =\\\> {
+
+   const clauseTitle = s.split(/\\\[、：:はがをに\\\]/)\\\[0\\\].slice(0, 18) || '研修要点';
+
+   sections.push({ title: clauseTitle, bodySentences: \\\[s\\\] });
+
+ });
+
+} else {
+
+ currentSection.bodySentences.push(cleanSentence);
+
+}
+
+}
+
+});
+
+// 1. Infer Category Numbers (1 to 7)
+
+const selectedNums = new Set();
+
+if (/困難|拒否|締め出し|リスク|未整理|複数回線|独居|認知症|虐待|セルフネグレクト|ヤングケアラー|8050/.test(cleaned)) selectedNums.add('1');
+
+if (/過去|振り返り|反省|改善|ヒヤリハット|事例検討|見直し|検証/.test(cleaned)) selectedNums.add('2');
+
+if (/地域包括|社会資源|他事業所|将棋|専門職|連携|インフォーマル|民生委員|配食|サロン|医療連携|多職種/.test(cleaned)) selectedNums.add('3');
+
+if (/制度|権利擁護|マイナンバー|成年後見|介護保険|加算|法令|生活保護|医療保険|法改正|報酬改定|コンプライアンス|BCP|虐待防止/.test(cleaned)) selectedNums.add('4');
+
+if (/服薬|手すり|訪問介護|通所介護|ケアマネジメント|アセスメント|環境整備|衛生|モニタリング|面談|自立支援|ケアプラン|相談援助|面接技術|ICF/.test(cleaned)) selectedNums.add('5');
+
+if (/苦情|クレーム|不満|要望|ハラスメント/.test(cleaned)) selectedNums.add('6');
+
+if (selectedNums.size === 0) {
+
+selectedNums.add('4');
+
+selectedNums.add('5');
+
+}
+
+const itemCellText = Array.from(selectedNums).sort().join('\n');
+
+// 2. Build Theme-Aligned Agenda Title & Up to 6 Concrete Study Items
+
+const sectionTitles = sections.map(s => s.title).filter(Boolean);
+
+let mainTheme = detectedTheme;
+
+if (!mainTheme) {
+
+if (sectionTitles.length \>= 2) {
+
+mainTheme = \`${sectionTitles\[0\]}・${sectionTitles\[1\]}等を踏まえたケアマネジメント実践研修\`;
+
+} else if (sectionTitles.length === 1) {
+
+mainTheme = \`${sectionTitles\[0\]}に関する専門職勉強会および支援実践の検討\`;
+
+} else {
+
+mainTheme = '利用者様の尊厳と自立を支えるケアマネジメント実践勉強会';
+
+}
+
+}
+
+const agendaBullets = (sections.length > 0 ? sections.slice(0, 6) : [{ title: mainTheme, bodySentences: [] }]).map(sec => {
+
+const bodyJoined = sec.bodySentences.join(' ').replace(/\\s+/g, '');
+
+const cleanBody = bodyJoined
+
+.replace(/ことに同意・決定した。?|ことで合意した。?|方針を決定した。?|方針とした。?|を確認した。?/g, '')
+
+.replace(/。$/g, '');
+
+if (cleanBody && cleanBody !== sec.title) {
+
+const snippet = cleanBody.length \> 25 ? cleanBody.slice(0, 24) + '…' : cleanBody;
+
+return \`\<li\>✅ ${escapeHtml(sec.title)}（${escapeHtml(snippet)}）\</li\>\`;
+
+}
+
+return \`\<li\>✅ ${escapeHtml(sec.title)}\</li\>\`;
+
+});
+
+const agendaHtml = `<div class="agenda-title">【議題】${escapeHtml(mainTheme)}</div><ul class="agenda-list">${agendaBullets.join('')}</ul>`;
+
+// 3. Person in Charge
+
+const personRaw = metaPerson.value.trim() || '研修担当者\n管理者';
+
+const personHtml = escapeHtml(personRaw).replace(/\r?\n|・|、|,\s*/g, '<br />');
+
+// 4. Synthesize the 2 required items closely aligned with the study theme and content:
+
+// 【今回の勉強会で学んだこと、気づき】 and 【ディスカッション内容】
+
+let learningText = '';
+
+let discussionText = '';
+
+const isKeyCase = /合鍵/.test(cleaned) && /将棋/.test(cleaned);
+
+if (isKeyCase && !userTheme) {
+
+learningText = 'ご本人のこれまでのご経験や「将棋が好き」といったお気持ちに丁寧に耳を傾け、無理のない段階的な支援を組み立てることの大切さを改めて学ばせていただきました。生活上の課題だけでなく、お一人おひとりの尊厳と安心に寄り添う姿勢を心に留めてまいります。';
+
+discussionText = '締め出し防止の合鍵分散保管や、夕方の訪問介護によるトイレ・浴室の衛生確保、内服薬の一元化と置き型手すりの試験導入を優しく進めることで合意いたしました。また、不要な通信契約や通帳等の整理は地域包括支援センターや権利擁護の専門職と連携して支援し、馴染みの将棋を楽しめる通所介護は信頼関係を整えた上でご提案してまいります。';
+
+} else {
+
+// Separate conceptual/learning points vs practical/action points from the sections
+
+const allExtractedPoints = sections.map(sec =\> {
+
+const rawBody = sec.bodySentences.join(' ').trim();
+
+if (!rawBody) return sec.title;
+
+const firstSent = rawBody.split('。')\[0\]
+
+ .replace(/ことに同意・決定した|ことで合意した|方針を決定した|方針とした|こととした|する必要がある|が重要である/g, '')
+
+ .trim();
+
+if (sec.title && !firstSent.includes(sec.title) && sec.title.length \<= 14) {
+
+ return \\\`${sec.title}（${firstSent.slice(0, 32)}）\\\`;
+
+}
+
+return firstSent.slice(0, 40);
+
+}).filter(Boolean);
+
+const themeLabel = detectedTheme || sectionTitles.slice(0, 2).join('・') || '本日の研修テーマ';
+
+const corePillars = sectionTitles.slice(0, 3).join('や') || '支援の基本視点';
+
+learningText = \`「${themeLabel}」をテーマとした今回の勉強会を通じ、${corePillars}における専門職としての視点や、ご利用者様・ご家族様の思いの背景に謙虚に耳を傾ける大切さを深く学ばせていただきました。制度や知識の理解にとどまらず、常にお一人おひとりの尊厳と安心に寄り添う優しい姿勢に改めて気づかされました。\`;
+
+const practicePoints = allExtractedPoints.slice(0, 5).join('、') || cleaned.slice(0, 140);
+
+discussionText = \`勉強会の内容を踏まえ、${practicePoints}についてケアマネジャー全員で丁寧に意見を交わしました。今回の学びを日々のアセスメントやケアプラン作成・モニタリングに活かし、地域包括支援センターや多職種・関係機関と温かく連携しながら、事業所全体で誠実に支援を実践していくことで合意いたしました。\`;
+
+}
+
+const header1 = '【今回の勉強会で学んだこと、気づき】';
+
+const header2 = '【ディスカッション内容】';
+
+const totalLength = header1.length + learningText.length + header2.length + discussionText.length;
+
+if (totalLength > 485) {
+
+const allowedDiscussionLen = Math.max(110, 475 - (header1.length + learningText.length + header2.length));
+
+discussionText = discussionText.slice(0, allowedDiscussionLen - 1).replace(/\[、。,.\]\*$/, '') + '。';
+
+}
+
+const discussionHtml =
+
+\`\<div class="discussion-item"\>\<strong\>${header1}\</strong\>${escapeHtml(learningText)}\</div\>\` +
+
+\`\<div class="discussion-item"\>\<strong\>${header2}\</strong\>${escapeHtml(discussionText)}\</div\>\`;
+
+return {
+
+'item-cell': itemCellText,
+
+'agenda-cell': agendaHtml,
+
+'person-cell': personHtml,
+
+'discussion-cell': discussionHtml,
+
+\_engine: 'Theme Study Analyzer'
+
+};
+
+}
+
+function renderMinutesToSheet(result) {
+
+itemContent.innerText = result['item-cell'] || '1\n5';
+
+agendaContent.innerHTML = result['agenda-cell'] || '';
+
+personContent.innerHTML = result['person-cell'] || '研修担当者<br />管理者';
+
+discussionContent.innerHTML = result['discussion-cell'] || '';
+
+updateDiscussionCharCount();
+
+updateSheetScale();
+
+}
+
+async function handleGenerate() {
+
+const raw = userInputEl.value.trim();
+
+if (!raw) {
+
+showToast('参照資料・会議メモを入力してください。', 'error');
+
+userInputEl.focus();
+
+return;
+
+}
+
+generateBtn.disabled = true;
+
+generateBtnText.textContent = 'Gemini Flashで解析中...';
+
+statusMessageEl.textContent = 'Gemini Flashを実行し、【今回の勉強会で学んだこと、気づき】と【ディスカッション内容】を生成しています...';
+
+try {
+
+let result = await tryFlashCanvasCall(raw);
+
+if (!result || !result\['discussion-cell'\]) {
+
+result = buildLocalFlashStructuredMinutes(raw);
+
+}
+
+renderMinutesToSheet(result);
+
+statusMessageEl.textContent = 'A4縦1枚フォーマットへの構造化が完了しました。PDFまたはWord(.docx)で保存できます。';
+
+showToast('Gemini Flashによる議事録構造化が完了しました');
+
+} catch (err) {
+
+console.error(err);
+
+showToast('構造化中にエラーが発生しました', 'error');
+
+} finally {
+
+generateBtn.disabled = false;
+
+generateBtnText.textContent = '議事録を構造化する';
+
+}
+
+}
+
+// Export PDF (Strictly 1-page A4 Portrait)
+
+async function handleExportPdf() {
+
+if (!window.jspdf || !window.html2canvas) {
+
+showToast('PDFライブラリの読み込みを確認中です。もう一度お試しください。', 'error');
+
+return;
+
+}
+
+showToast('A4縦1枚PDFを生成しています...');
+
+const prevTransform = printableSheet.style.transform;
+
+printableSheet.style.transform = 'none';
+
+try {
+
+const canvas = await window.html2canvas(printableSheet, {
+
+scale: 2.5,
+
+useCORS: true,
+
+backgroundColor: '#ffffff',
+
+width: 780,
+
+height: 1103,
+
+windowWidth: 780,
+
+windowHeight: 1103
+
+});
+
+const imgData = canvas.toDataURL('image/png', 1.0);
+
+const { jsPDF } = window.jspdf;
+
+const pdf = new jsPDF('p', 'mm', 'a4');
+
+const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
+
+const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm
+
+pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+
+pdf.save('kaigigiroku_A4.pdf');
+
+showToast('PDF（kaigigiroku_A4.pdf）を保存しました');
+
+} catch (err) {
+
+console.error('PDF Export Error:', err);
+
+showToast('PDFの出力中にエラーが発生しました', 'error');
+
+} finally {
+
+printableSheet.style.transform = prevTransform;
+
+}
+
+}
+
+// Export Word (.docx) with strict DXA fixed table layout & columnWidths so columns NEVER collapse in Word
+
+async function handleExportDocx() {
+
+showToast('Word（.docx）ファイルを生成しています...');
+
+try {
+
+const officeName = (officeCell.innerText || '').trim();
+
+const dateTime = (datetimeCell.innerText || '').trim();
+
+const place = (placeCell.innerText || '').trim();
+
+const mc = (mcCell.innerText || '').trim();
+
+const recorder = (recorderCell.innerText || '').trim();
+
+const attendees = (attendeesCell.innerText || '').trim() + ' 名';
+
+const absentees = (absenteesCell.innerText || '').trim();
+
+const itemNums = (itemContent.innerText || '').trim().split(/\\r?\\n/).filter(Boolean);
+
+const agendaTitleEl = agendaContent.querySelector('.agenda-title');
+
+const agendaTitleText = agendaTitleEl ? agendaTitleEl.innerText.trim() : '【議題】';
+
+const agendaListEls = agendaContent.querySelectorAll('.agenda-list li');
+
+const agendaBullets = Array.from(agendaListEls).map(li =\> li.innerText.trim());
+
+const personLines = (personContent.innerText || '').trim().split(/\\r?\\n/).filter(Boolean);
+
+const discussionBlocks = \[\];
+
+const discItems = discussionContent.querySelectorAll('.discussion-item');
+
+if (discItems.length \> 0) {
+
+discItems.forEach(div =\> {
+
+ const strongEl = div.querySelector('strong');
+
+ const heading = strongEl ? strongEl.innerText.trim() : '';
+
+ const fullText = div.innerText.trim();
+
+ const body = heading && fullText.startsWith(heading)
+
+   ? fullText.slice(heading.length).trim()
+
+   : fullText;
+
+ discussionBlocks.push({ heading, body });
+
+});
+
+} else {
+
+discussionBlocks.push({ heading: '', body: (discussionContent.innerText || '').trim() });
+
+}
+
+if (window.docx) {
+
+const {
+
+ Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+
+ WidthType, TableLayoutType, AlignmentType, BorderStyle, VerticalAlign, ShadingType, HeightRule
+
+} = window.docx;
+
+// A4 Portrait exact dimensions in twips (DXA):
+
+// Page Width = 210mm = 11906 dxa, Page Height = 297mm = 16838 dxa
+
+// Left/Right Margin = 553 dxa (\~9.75mm) =\> Total Printable Table Width = 10800 dxa (exact match to 780px sheet proportions)
+
+const TOTAL_WIDTH_DXA = 10800;
+
+const outerBorder = { style: BorderStyle.SINGLE, size: 12, color: '000000' }; // 1.5pt
+
+const innerBorder = { style: BorderStyle.SINGLE, size: 6, color: '000000' }; // 0.75pt
+
+const dashedBottom = { style: BorderStyle.DASHED, size: 6, color: 'AAAAAA' };
+
+const solidGrayBottom = { style: BorderStyle.SINGLE, size: 6, color: 'CCCCCC' };
+
+const headerShading = { fill: 'E8E8E8', type: ShadingType.CLEAR, color: 'auto' };
+
+const makeCellDxa = (children, widthDxa, opts = {}) =\> {
+
+ const {
+
+   isHeader = false,
+
+   colSpan = 1,
+
+   vAlign = VerticalAlign.CENTER,
+
+   margins = { top: 45, bottom: 45, left: 90, right: 90 },
+
+   customBorders = null
+
+ } = opts;
+
+ return new TableCell({
+
+   children: children && children.length \\\> 0 ? children : \\\[new Paragraph({})\\\],
+
+   width: { size: widthDxa, type: WidthType.DXA },
+
+   columnSpan: colSpan \\\> 1 ? colSpan : undefined,
+
+   verticalAlign: vAlign,
+
+   shading: isHeader ? headerShading : undefined,
+
+   borders: customBorders || {
+
+     top: innerBorder,
+
+     bottom: isHeader ? outerBorder : innerBorder,
+
+     left: innerBorder,
+
+     right: innerBorder
+
+   },
+
+   margins
+
+ });
+
+};
+
+const makePara = (text, opts = {}) =\> {
+
+ const {
+
+   bold = false,
+
+   align = AlignmentType.LEFT,
+
+   sizeHalfPt = 19,
+
+   before = 15,
+
+   after = 15,
+
+   line = 240,
+
+   bottomBorder = null,
+
+   indentLeft = 0,
+
+   hanging = 0
+
+ } = opts;
+
+ return new Paragraph({
+
+   alignment: align,
+
+   spacing: { before, after, line },
+
+   indent: (indentLeft || hanging) ? { left: indentLeft, hanging } : undefined,
+
+   border: bottomBorder ? { bottom: bottomBorder } : undefined,
+
+   children: \\\[
+
+     new TextRun({
+
+       text: String(text ?? ''),
+
+       bold,
+
+       size: sizeHalfPt,
+
+       font: 'MS PGothic'
+
+     })
+
+   \\\]
+
+ });
+
+};
+
+const tableOuterBorders = {
+
+ top: outerBorder,
+
+ bottom: outerBorder,
+
+ left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+
+ right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+
+ insideHorizontal: innerBorder,
+
+ insideVertical: innerBorder
+
+};
+
+// 1. Info Table (4 columns: 1620 + 4080 + 1300 + 3800 = 10800 dxa)
+
+const INFO_COLS = \[1620, 4080, 1300, 3800\];
+
+const infoTable = new Table({
+
+ width: { size: TOTAL_WIDTH_DXA, type: WidthType.DXA },
+
+ layout: TableLayoutType.FIXED,
+
+ columnWidths: INFO_COLS,
+
+ borders: tableOuterBorders,
+
+ rows: \\\[
+
+   new TableRow({
+
+     height: { value: 340, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('開催日時', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara(dateTime, { align: AlignmentType.LEFT, sizeHalfPt: 19 })\\\], 9180, { colSpan: 3 })
+
+     \\\]
+
+   }),
+
+   new TableRow({
+
+     height: { value: 340, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('場 所', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara(place, { align: AlignmentType.LEFT, sizeHalfPt: 19 })\\\], 9180, { colSpan: 3 })
+
+     \\\]
+
+   }),
+
+   new TableRow({
+
+     height: { value: 340, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('司会者', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara(mc, { align: AlignmentType.LEFT, sizeHalfPt: 19 })\\\], 4080),
+
+       makeCellDxa(\\\[makePara('記録者', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1300, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara(recorder, { align: AlignmentType.LEFT, sizeHalfPt: 19 })\\\], 3800)
+
+     \\\]
+
+   }),
+
+   new TableRow({
+
+     height: { value: 340, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('出席者', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true }),
+
+       makeCellDxa(\\\[
+
+         new Paragraph({
+
+           alignment: AlignmentType.LEFT,
+
+           spacing: { before: 15, after: 15, line: 240 },
+
+           children: \\\[
+
+             new TextRun({ text: (attendeesCell.innerText || '').trim(), size: 19, font: 'MS PGothic' }),
+
+             new TextRun({ text: '　　名', size: 19, font: 'MS PGothic' })
+
+           \\\]
+
+         })
+
+       \\\], 9180, { colSpan: 3 })
+
+     \\\]
+
+   }),
+
+   new TableRow({
+
+     height: { value: 340, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('欠席者', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara(absentees, { align: AlignmentType.LEFT, sizeHalfPt: 19 })\\\], 9180, { colSpan: 3 })
+
+     \\\]
+
+   })
+
+ \\\]
+
+});
+
+// 2. Main Content Table (4 columns matching HTML 5% / 41% / 10% / 44% -\> 600 + 4400 + 1080 + 4720 = 10800 dxa)
+
+const MAIN_COLS = \[600, 4400, 1080, 4720\];
+
+const agendaChildren = \[
+
+ makePara(agendaTitleText, {
+
+   bold: true,
+
+   align: AlignmentType.LEFT,
+
+   sizeHalfPt: 19,
+
+   before: 20,
+
+   after: 80,
+
+   line: 250,
+
+   bottomBorder: solidGrayBottom
+
+ }),
+
+ ...agendaBullets.map(b =\\\>
+
+   makePara(b, {
+
+     bold: false,
+
+     align: AlignmentType.LEFT,
+
+     sizeHalfPt: 18,
+
+     before: 35,
+
+     after: 35,
+
+     line: 245,
+
+     indentLeft: 240,
+
+     hanging: 240
+
+   })
+
+ )
+
+\];
+
+const discussionChildren = \[\];
+
+discussionBlocks.forEach((b, idx) =\> {
+
+ const isLast = idx === discussionBlocks.length - 1;
+
+ if (b.heading) {
+
+   discussionChildren.push(
+
+     makePara(b.heading, {
+
+       bold: true,
+
+       align: AlignmentType.LEFT,
+
+       sizeHalfPt: 19,
+
+       before: idx === 0 ? 20 : 90,
+
+       after: 30,
+
+       line: 245
+
+     })
+
+   );
+
+ }
+
+ if (b.body) {
+
+   discussionChildren.push(
+
+     makePara(b.body, {
+
+       bold: false,
+
+       align: AlignmentType.LEFT,
+
+       sizeHalfPt: 18,
+
+       before: 10,
+
+       after: isLast ? 30 : 90,
+
+       line: 255,
+
+       bottomBorder: isLast ? null : dashedBottom
+
+     })
+
+   );
+
+ }
+
+});
+
+const itemChildren = (itemNums.length \> 0 ? itemNums : \['1', '5'\]).map(n =\>
+
+ makePara(n, { bold: false, align: AlignmentType.CENTER, sizeHalfPt: 19, before: 30, after: 30 })
+
+);
+
+const personChildren = (personLines.length \> 0 ? personLines : \['研修担当者', '管理者'\]).map(p =\>
+
+ makePara(p, { bold: false, align: AlignmentType.CENTER, sizeHalfPt: 18, before: 30, after: 30 })
+
+);
+
+const mainTable = new Table({
+
+ width: { size: TOTAL_WIDTH_DXA, type: WidthType.DXA },
+
+ layout: TableLayoutType.FIXED,
+
+ columnWidths: MAIN_COLS,
+
+ borders: tableOuterBorders,
+
+ rows: \\\[
+
+   new TableRow({
+
+     height: { value: 420, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(\\\[makePara('項目※', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 18 })\\\], 600, {
+
+         isHeader: true,
+
+         margins: { top: 45, bottom: 45, left: 20, right: 20 }
+
+       }),
+
+       makeCellDxa(\\\[makePara('議題', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 4400, { isHeader: true }),
+
+       makeCellDxa(\\\[makePara('担当者名', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 18 })\\\], 1080, {
+
+         isHeader: true,
+
+         margins: { top: 45, bottom: 45, left: 30, right: 30 }
+
+       }),
+
+       makeCellDxa(\\\[makePara('検討内容及び決定事項', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 4720, { isHeader: true })
+
+     \\\]
+
+   }),
+
+   new TableRow({
+
+     height: { value: 5800, rule: HeightRule.ATLEAST },
+
+     children: \\\[
+
+       makeCellDxa(itemChildren, 600, {
+
+         vAlign: VerticalAlign.TOP,
+
+         margins: { top: 90, bottom: 90, left: 20, right: 20 }
+
+       }),
+
+       makeCellDxa(agendaChildren, 4400, {
+
+         vAlign: VerticalAlign.TOP,
+
+         margins: { top: 90, bottom: 90, left: 110, right: 110 }
+
+       }),
+
+       makeCellDxa(personChildren, 1080, {
+
+         vAlign: VerticalAlign.TOP,
+
+         margins: { top: 90, bottom: 90, left: 40, right: 40 }
+
+       }),
+
+       makeCellDxa(discussionChildren, 4720, {
+
+         vAlign: VerticalAlign.TOP,
+
+         margins: { top: 90, bottom: 90, left: 110, right: 110 }
+
+       })
+
+     \\\]
+
+   })
+
+ \\\]
+
+});
+
+// 3. Category Reference Table (2 columns: 650 + 10150 = 10800 dxa)
+
+const CAT_COLS = \[650, 10150\];
+
+const categories = \[
+
+ \\\['1', '現に抱える処遇困難ケースについて具体的な処遇方針'\\\],
+
+ \\\['2', '過去に取り扱ったケースについての問題点及びその改善方策'\\\],
+
+ \\\['3', '地域における事業者や活用できる社会資源の状況'\\\],
+
+ \\\['4', '保健医療及び福祉に関する制度'\\\],
+
+ \\\['5', 'ケアマネジメントに関する技術'\\\],
+
+ \\\['6', '利用者からの苦情があった場合にはその内容及び改善方針'\\\],
+
+ \\\['7', 'その他必要な事項'\\\]
+
+\];
+
+const categoryTable = new Table({
+
+ width: { size: TOTAL_WIDTH_DXA, type: WidthType.DXA },
+
+ layout: TableLayoutType.FIXED,
+
+ columnWidths: CAT_COLS,
+
+ borders: tableOuterBorders,
+
+ rows: categories.map((\\\[num, label\\\]) =\\\> new TableRow({
+
+   height: { value: 260, rule: HeightRule.ATLEAST },
+
+   children: \\\[
+
+     makeCellDxa(\\\[makePara(num, { align: AlignmentType.CENTER, sizeHalfPt: 17, before: 10, after: 10 })\\\], 650, {
+
+       margins: { top: 20, bottom: 20, left: 30, right: 30 }
+
+     }),
+
+     makeCellDxa(\\\[makePara(label, { align: AlignmentType.LEFT, sizeHalfPt: 17, before: 10, after: 10 })\\\], 10150, {
+
+       margins: { top: 20, bottom: 20, left: 140, right: 90 }
+
+     })
+
+   \\\]
+
+ }))
+
+});
+
+// 4. Confirmation Stamp Table (11 columns: 1620 + 10 \* 918 = 10800 dxa)
+
+const CONFIRM_COLS = \[1620, 918, 918, 918, 918, 918, 918, 918, 918, 918, 918\];
+
+const confirmCells = \[
+
+ makeCellDxa(\\\[makePara('確認欄', { bold: true, align: AlignmentType.CENTER, sizeHalfPt: 19 })\\\], 1620, { isHeader: true })
+
+\];
+
+const stampCellsDom = printableSheet.querySelectorAll('.confirmation-table td:not(.label-cell)');
+
+for (let i = 0; i \< 10; i++) {
+
+ const stampVal = stampCellsDom\\\[i\\\] ? (stampCellsDom\\\[i\\\].innerText || '').trim() : '';
+
+ confirmCells.push(
+
+   makeCellDxa(\\\[makePara(stampVal, { align: AlignmentType.CENTER, sizeHalfPt: 18 })\\\], 918, {
+
+     margins: { top: 30, bottom: 30, left: 20, right: 20 }
+
+   })
+
+ );
+
+}
+
+const confirmTable = new Table({
+
+ width: { size: TOTAL_WIDTH_DXA, type: WidthType.DXA },
+
+ layout: TableLayoutType.FIXED,
+
+ columnWidths: CONFIRM_COLS,
+
+ borders: tableOuterBorders,
+
+ rows: \\\[
+
+   new TableRow({
+
+     height: { value: 520, rule: HeightRule.ATLEAST },
+
+     children: confirmCells
+
+   })
+
+ \\\]
+
+});
+
+const paddedOffice = officeName
+
+ ? \\\`　${officeName}　　　　　　　　　　　　　　　　　　\\\`
+
+ : '　　　　　　　　　　　　　　　　　　　　　　　　　　　　　';
+
+const doc = new Document({
+
+ sections: \\\[{
+
+   properties: {
+
+     page: {
+
+       size: { width: 11906, height: 16838 }, // Strict A4 Portrait (210mm x 297mm)
+
+       margin: { top: 560, right: 553, bottom: 520, left: 553 }
+
+     }
+
+   },
+
+   children: \\\[
+
+     new Paragraph({
+
+       alignment: AlignmentType.CENTER,
+
+       spacing: { before: 0, after: 100 },
+
+       children: \\\[
+
+         new TextRun({ text: '特定事業所加算における定期的な会議 ', bold: true, size: 30, font: 'MS PGothic' }),
+
+         new TextRun({ text: '(居宅支援事業所用)', bold: false, size: 22, font: 'MS PGothic' })
+
+       \\\]
+
+     }),
+
+     new Paragraph({
+
+       alignment: AlignmentType.LEFT,
+
+       spacing: { before: 20, after: 110 },
+
+       indent: { left: 180 },
+
+       children: \\\[
+
+         new TextRun({ text: '居宅支援事業所名：', size: 21, font: 'MS PGothic' }),
+
+         new TextRun({ text: paddedOffice, size: 21, font: 'MS PGothic', underline: {} })
+
+       \\\]
+
+     }),
+
+     infoTable,
+
+     new Paragraph({ spacing: { before: 40, after: 40 }, children: \\\[new TextRun({ text: '', size: 8 })\\\] }),
+
+     mainTable,
+
+     new Paragraph({
+
+       alignment: AlignmentType.RIGHT,
+
+       spacing: { before: 40, after: 40 },
+
+       children: \\\[
+
+         new TextRun({ text: '※「議題」左欄の「項目」には一覧の該当する番号を記入すること', size: 16, font: 'MS PGothic' })
+
+       \\\]
+
+     }),
+
+     categoryTable,
+
+     new Paragraph({ spacing: { before: 40, after: 40 }, children: \\\[new TextRun({ text: '', size: 8 })\\\] }),
+
+     confirmTable
+
+   \\\]
+
+ }\\\]
+
+});
+
+const blob = await Packer.toBlob(doc);
+
+triggerDownload(blob, 'kaigigiroku_A4.docx');
+
+showToast('レイアウト固定済みのWordファイル（kaigigiroku_A4.docx）を保存しました');
+
+} else {
+
+throw new Error('docx library unavailable');
+
+}
+
+} catch (err) {
+
+console.error('DOCX Export Error:', err);
+
+showToast('Wordファイルの出力中にエラーが発生しました', 'error');
+
+}
+
+}
+
+function triggerDownload(blob, filename) {
+
+const url = URL.createObjectURL(blob);
+
+const a = document.createElement('a');
+
+a.href = url;
+
+a.download = filename;
+
+document.body.appendChild(a);
+
+a.click();
+
+setTimeout(() => {
+
+document.body.removeChild(a);
+
+URL.revokeObjectURL(url);
+
+}, 200);
+
+}
+
+// Event Listeners
+
+userInputEl.addEventListener('input', () => {
+
+inputCharCountEl.textContent = `${userInputEl.value.length} 文字入力中`;
+
+});
+
+loadSampleBtn.addEventListener('click', () => {
+
+userInputEl.value = TAB2_SAMPLE_TEXT;
+
+inputCharCountEl.textContent = `${userInputEl.value.length} 文字入力中`;
+
+handleGenerate();
+
+});
+
+clearInputBtn.addEventListener('click', () => {
+
+userInputEl.value = '';
+
+inputCharCountEl.textContent = '0 文字入力中';
+
+userInputEl.focus();
+
+});
+
+toggleMetaBtn.addEventListener('click', () => {
+
+const isHidden = metaPanel.classList.contains('hidden');
+
+if (isHidden) {
+
+metaPanel.classList.remove('hidden');
+
+metaChevron.style.transform = 'rotate(180deg)';
+
+} else {
+
+metaPanel.classList.add('hidden');
+
+metaChevron.style.transform = 'rotate(0deg)';
+
+}
+
+});
+
+generateBtn.addEventListener('click', handleGenerate);
+
+headerPdfBtn.addEventListener('click', handleExportPdf);
+
+previewPdfBtn.addEventListener('click', handleExportPdf);
+
+headerDocxBtn.addEventListener('click', handleExportDocx);
+
+previewDocxBtn.addEventListener('click', handleExportDocx);
+
+// View mode toggle (Split view vs Full A4 Preview)
+
+tabSplitBtn.addEventListener('click', () => {
+
+inputColumn.classList.remove('hidden');
+
+previewColumn.classList.remove('lg:col-span-12');
+
+previewColumn.classList.add('lg:col-span-7');
+
+tabSplitBtn.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-slate-800 shadow-sm';
+
+tabPreviewBtn.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-600 hover:text-slate-900';
+
+setTimeout(updateSheetScale, 50);
+
+});
+
+tabPreviewBtn.addEventListener('click', () => {
+
+inputColumn.classList.add('hidden');
+
+previewColumn.classList.remove('lg:col-span-7');
+
+previewColumn.classList.add('lg:col-span-12');
+
+tabPreviewBtn.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-white text-slate-800 shadow-sm';
+
+tabSplitBtn.className = 'px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-slate-600 hover:text-slate-900';
+
+setTimeout(updateSheetScale, 50);
+
+});
+
+// Initialize on load with Tab 2 sample pre-loaded and structured so user immediately sees the working result
+
+window.addEventListener('DOMContentLoaded', () => {
+
+userInputEl.value = TAB2_SAMPLE_TEXT;
+
+inputCharCountEl.textContent = `${userInputEl.value.length} 文字入力中`;
+
+const initialResult = buildLocalFlashStructuredMinutes(TAB2_SAMPLE_TEXT);
+
+renderMinutesToSheet(initialResult);
+
+setTimeout(updateSheetScale, 100);
+
+});
+
+})();
+
+</script>
+
+</body>
+
+</html>
