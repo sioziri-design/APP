@@ -1,0 +1,1941 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HandSketchToCAD Pro</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar hiding utility */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        body {
+            font-family: 'Inter', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            background-color: #f1f5f9;
+        }
+    </style>
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Loading Lucide React icons -->
+    <script>
+        // Fix for lucide-react UMD build expecting 'react' instead of 'React'
+        window.react = window.React;
+    </script>
+    <script src="https://unpkg.com/lucide-react@0.344.0/dist/umd/lucide-react.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback, useRef, useEffect, useMemo } = React;
+        
+        const LucideIcons = window.lucideReact || window.LucideReact || window.lucide || {};
+        const FallbackIcon = () => <span className="w-4 h-4 inline-block bg-slate-200 rounded-full" title="Icon missing"></span>;
+
+        const {
+            FileText = FallbackIcon, Code = FallbackIcon, Image: ImageIcon = FallbackIcon, Download = FallbackIcon, Upload = FallbackIcon, AlertCircle = FallbackIcon,
+            ArrowRight = FallbackIcon, CheckCircle2 = FallbackIcon, DraftingCompass = FallbackIcon, Database = FallbackIcon, ShieldCheck = FallbackIcon,
+            RefreshCw = FallbackIcon, MessageSquare = FallbackIcon, Gauge = FallbackIcon, RotateCcw = FallbackIcon, PenTool = FallbackIcon, Layers = FallbackIcon, Eye = FallbackIcon,
+            ZoomIn = FallbackIcon, ZoomOut = FallbackIcon, Maximize2 = FallbackIcon, Sliders = FallbackIcon, Check = FallbackIcon, Copy = FallbackIcon, Sparkles = FallbackIcon,
+            Grid = FallbackIcon, Box = FallbackIcon, Wrench = FallbackIcon, ChevronRight = FallbackIcon, Edit3 = FallbackIcon, Play = FallbackIcon, Trash2 = FallbackIcon, PlusCircle = FallbackIcon,
+            SplitSquareHorizontal = FallbackIcon, FileCode = FallbackIcon, HelpCircle = FallbackIcon, Activity = FallbackIcon
+        } = LucideIcons;
+
+        const AppState = {
+            IDLE: 'IDLE',
+            ANALYZING: 'ANALYZING',
+            BLUEPRINT_READY: 'BLUEPRINT_READY',
+            VERIFYING_BLUEPRINT: 'VERIFYING_BLUEPRINT',
+            BLUEPRINT_VERIFIED: 'BLUEPRINT_VERIFIED',
+            GENERATING_CAD: 'GENERATING_CAD',
+            COMPLETE: 'COMPLETE',
+            ERROR: 'ERROR'
+        };
+
+        const BLUEPRINT_SYSTEM_DIRECTIVE = `
+metadata:
+  name: "Architectural Hand-to-CAD Blueprint Generator"
+  version: "5.27.0 (Hallway Awareness Protocol)"
+  author: "User Constraint Compliance Engine"
+  description: >
+    A high-precision textual CAD generation engine designed to convert
+    imperfect hand-drawn floor plan sketches into strictly structured
+    YAML blueprints. 
+    INCLUDES "ANTI_DUPLICATION_LOGIC", "ANTI_WALL_WRAPPING_LOGIC", "STRICT_COUNT_ENFORCEMENT", "WHEELCHAIR_LOGIC", "MATERIAL_AWARENESS", "HALLWAY_DETECTION".
+system_directive:
+  role: "Expert Architectural CAD Engineer & Geometric Computer Vision Analyst"
+  mission: "Convert the user's hand-drawn floor plan sketch into a rigorous, syntactically perfect YAML blueprint representation."
+  critical_protocol: "ZERO_HALLUCINATION_TOLERANCE"
+  language: "Japanese (Output structure keys in English, Values in Japanese/English mixed as appropriate)"
+execution_context:
+  premise: >
+    The input image is a non-professional hand-drawn sketch.
+    WARNING: The image may contain dirt, erased lines, or noise.
+    YOU MUST DISTINGUISH BETWEEN INTENTIONAL LINES AND NOISE.
+  attitude:
+    - "SKEPTICISM: Do not believe a room exists unless fully enclosed."
+    - "LITERALISM: If a toilet is not drawn, do not add it, even if the room is labeled 'Toilet'."
+    - "COUNT_VERIFICATION: If you list 2 items, point to 2 distinct locations in the image."
+    - "STRICT_EXCLUSION: Ignore lines that look like mistakes or scribbles."
+    - "ANTI-ENCAPSULATION: Furniture (Cupboards, Fridges, Shelves) are objects, NOT rooms. NEVER draw walls around them."
+    - "ROOM_INTEGRITY: Small rooms (Toilet, Bath) must be single spaces. Do not subdivide them with phantom walls."
+    - "ANTI-DUPLICATION: Never generate 2 entities for 1 symbol. If there is 1 toilet in the sketch, there MUST be only 1 'F_...' entity in the YAML."
+workflow_steps:
+  1_image_normalization:
+    - "Mentally align the image to grid coordinates (X, Y)."
+    - "Set Coordinate System: Origin (0,0) at bottom-left. Scale width to 1000 units."
+    - "Filter: Aggressively remove faint lines (opacity < 50%) as noise."
+  2_component_identification_strict:
+    - "Scan for WALLS. Reject 'ghost walls' caused by paper folds or scanner artifacts."
+    - "Scan for FIXTURES. REQUIRE visual confirmation of the specific symbol (e.g., oval for toilet) before listing."
+    - "Scan for TEXT. Use text to confirm room function, BUT NOT to Hallucinate furniture."
+    - "CRITICAL RULE: Distinguish between a 'Cupboard/Storage' rectangle and a 'Room' rectangle. Cupboards do NOT have walls around them."
+    
+    # NEW MATERIAL DETECTION
+    - "SPECIAL DETECTION: FLOOR MATERIALS (TEXT-BASED):"
+      - "If text says 'Flooring' or 'フローリング', APPEND '(Flooring)' to the Room Name."
+      - "If text says 'Tatami', '畳', 'Washitsu', or '和室', APPEND '(Tatami)' to the Room Name."
+      - "If text says 'Tile' or 'タイル', APPEND '(Tile)' to the Room Name."
+    
+    # HALLWAY DETECTION (NEW)
+    - "SPECIAL DETECTION: HALLWAY (ROKA):"
+      - "Identify if labeled 'Hallway', 'Corridor', '廊下', 'ろうか'."
+      - "Identify if visually implied as a long connecting passage between rooms."
+      - "Strictly map to functional type 'hallway'. DO NOT COUNT THIS in 'total_rooms_detected'."
+    - "SPECIAL DETECTION: TOILET (WC):"
+      - "Identify if labeled 'Toilet', 'トイレ', 'WC', 'Restroom', or visually depicted."
+      - "Strictly map to type 'toilet'."
+    - "SPECIAL DETECTION: BED CLASSIFICATION (CRITICAL):"
+      - "TYPE A 'FUTON': Text says 'Futon'/'布団' OR visual is a mattress on floor."
+      - "TYPE B 'BED_STANDARD' (Bed #2): Text says 'Bed 2', 'Bed ②', 'Standard Bed', or 'Normal Bed'."
+      - "TYPE C 'BED_NURSING' (Bed #1): The DEFAULT for ANY 'Bed' label/shape that is not explicitly Type A or B. MUST BE SINGLE."
+    - "SPECIAL DETECTION: WHEELCHAIR (KURUMAISU):"
+      - "Identify if labeled 'Wheelchair', '車いす', '車椅子', or visually depicted."
+      - "Strictly map to type 'wheelchair'."
+    - "SPECIAL DETECTION: GENKAN (ENTRANCE):"
+      - "Identify the main entrance area if labeled 'Genkan' or '玄関'."
+      - "Check for shoe storage (Getabako) indications."
+    - "SPECIAL DETECTION: DINING TABLE:"
+      - "Identify if labeled 'Table', 'Dining', or 'テーブル'."
+      - "Default to 'dining_table' type."
+    - "SPECIAL DETECTION: KOTATSU (HEATED TABLE):"
+      - "Identify if labeled 'Kotatsu', 'こたつ', or 'コタツ'."
+      - "Strictly map to type 'kotatsu'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: KITCHEN:"
+      - "Identify if labeled 'Kitchen' or 'キッチン'."
+      - "Identify main kitchen counter bounds."
+    - "SPECIAL DETECTION: CUPBOARD (SHOKKIDANA):"
+      - "Identify if labeled 'Cupboard' or '食器棚'."
+      - "Strictly map to type 'cupboard'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: WASHBASIN (SENMENDAI):"
+      - "Identify if labeled 'Washbasin' or '洗面台'."
+      - "Strictly map to type 'washbasin'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: TANSU (CHEST):"
+      - "Identify if labeled 'Tansu' or 'タンス'."
+      - "Strictly map to type 'tansu'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: WASHING MACHINE (SENTAKUKI):"
+      - "Identify if labeled 'Washing Machine' or '洗濯機'."
+      - "Strictly map to type 'washing_machine'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: STAIRS (KAIDAN):"
+      - "Identify if labeled 'Stairs', '階段', '2階へ', or visually depicted as parallel lines in a row."
+      - "Strictly map to type 'stairs'. Do NOT use if missing."
+    - "SPECIAL DETECTION: SHELF (TANA/RACK):"
+      - "Identify if labeled 'Shelf', 'Rack', '棚', or 'ラック'."
+      - "Strictly map to type 'shelf'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: BATH (OFURO/YOKUSHITSU):"
+      - "Identify if labeled 'Bath', 'Bathroom', 'お風呂', or '浴室'."
+      - "Strictly map to type 'bath'. Do NOT use if label is missing."
+    - "SPECIAL DETECTION: SMALL TABLE (TABLE_SMALL):"
+      - "Identify ONLY if labeled 'Table (Small)' or 'テーブル（小）'."
+      - "Strictly map to type 'small_table'. Do NOT use for generic tables."
+    - "SPECIAL DETECTION: DOOR (STANDARD):"
+      - "Identify if labeled 'Door', 'ドア', or indicated by a quarter-circle swing arc."
+      - "Strictly map to type 'single_swing_door'."
+    - "SPECIAL DETECTION: FOLDING DOOR (ORIDO):"
+      - "Identify if labeled 'Folding Door', '折り戸', '折戸', or visually depicted as a V-shape zigzag."
+      - "Strictly map to type 'folding_door'."
+    - "SPECIAL DETECTION: SLIDING DOOR (HIKIDO):"
+      - "Identify if labeled 'Sliding Door', '引き戸', '引戸', or visually depicted as two offset parallel lines."
+      - "Strictly map to type 'sliding_door'."
+  3_geometry_rectification:
+    - "Orthogonalize: Snap near-vertical/horizontal lines to exactly 0° or 90°."
+    - "Corner Closure: Connect endpoints only if they are within 5% distance."
+    - "Wall Pruning: DELETE walls that seem to merely outline a fixture (like a fridge, cupboard, or shelf). Only keep structural partition walls."
+  4_deduplication_pass:
+    - "Check every room: Does it have 2 toilets? If yes, and the sketch only has 1, DELETE ONE."
+    - "Check every room: Does it have 2 baths? If yes, and the sketch only has 1, DELETE ONE."
+    - "Check Walls: Are there walls inside the Toilet room? DELETE THEM."
+  5_blueprint_serialization:
+    - "Translate the rectified geometry into the YAML Schema."
+    - "CRITICAL: Calculate the exact count of each fixture type found. Verify this count matches the visual evidence."
+output_schema_specification:
+  format: "YAML"
+  structure:
+    scale_reference:
+      width_units: 1000
+      aspect_ratio: "{calculated_from_image}"
+    
+    defaults:
+      standard_wall_thickness: 150
+      standard_door_width: 800
+      floor_height: 2400
+    
+    # STRICT INVENTORY CONTROL
+    inventory_check:
+      total_rooms_detected: integer # HABITABLE ROOMS ONLY (e.g., LDK, Bedroom, Tatami Rm > 4.5jo). EXCLUDE Hallways, Baths, Toilets, Genkan.
+      total_hallways_detected: integer # Count of corridors/roka.
+      total_toilets_detected: integer
+      total_wheelchairs_detected: integer
+      total_sinks_detected: integer
+      total_beds_nursing_detected: integer
+      total_beds_standard_detected: integer
+      total_futons_detected: integer
+      total_dining_tables_detected: integer
+      total_kotatsus_detected: integer
+      total_kitchens_detected: integer
+      total_cupboards_detected: integer
+      total_washbasins_detected: integer
+      total_tansus_detected: integer
+      total_washing_machines_detected: integer
+      total_stairs_detected: integer
+      total_shelves_detected: integer
+      total_baths_detected: integer
+      total_small_tables_detected: integer
+      total_doors_detected: integer
+      total_folding_doors_detected: integer
+      total_sliding_doors_detected: integer
+    
+    entities:
+      walls:
+        - id: "W_{unique_index}"
+          start: [x1, y1]
+          end: [x2, y2]
+          type: "structural | partition"
+      
+      openings:
+        - id: "D_{unique_index}"
+          host_wall_id: "W_{parent_wall_id}"
+          type: "single_swing_door | sliding_door | folding_door | window | opening_only"
+          center_position: [x, y]
+      
+      fixtures:
+        - id: "F_{unique_index}"
+          type: "toilet | sink | tub | kitchen_counter | stove | bed_nursing | bed_standard | futon | shoe_rack | dining_table | kotatsu | cupboard | washbasin | tansu | washing_machine | stairs | shelf | bath | small_table | wheelchair"
+          bounds: [[x1,y1], [x2,y2]]
+          orientation: 0 | 90 | 180 | 270
+          verification_note: "Visually present at [x,y]. Count confirmed." 
+      
+      rooms:
+        - id: "R_{unique_index}"
+          name: "detected_text_or_inferred_function"
+          boundary_wall_ids: ["W_1", "W_2", ...]
+constraints_and_validations:
+  hallucination_prevention_rules:
+    - "RULE: EXACT COUNT. If the image has 1 toilet, the YAML MUST have exactly 1 toilet. Generating 2 is a FATAL ERROR."
+    - "RULE: NO FURNITURE WRAPPING. If a rectangle is a Cupboard/Shelf/Fridge, it is a FIXTURE, not a room enclosed by walls. DELETE WALLS wrapping fixtures."
+    - "RULE: NO INTERNAL MAZES. Toilets and Baths are single polygons. No internal partitions."
+  orthogonality_enforcement: "Deviation within 5 degrees MUST be corrected to 0 or 90."
+instruction_to_ai: >
+  ANALYZE the provided sketch.
+  EXECUTE the 'hallucination_prevention_rules' strictly.
+  GENERATE the YAML code block.
+  
+  IMPORTANT: 
+  1. Do not output conversational text.
+  2. Verify your counts before outputting YAML.
+  3. Default undefined beds to 'bed_nursing'.
+  4. Only identify 'kotatsu' if explicitly labeled 'こたつ'/'コタツ'.
+  5. Only identify 'cupboard' if explicitly labeled '食器棚'.
+  6. Only identify 'washbasin' if explicitly labeled '洗面台'.
+  7. Only identify 'tansu' if explicitly labeled 'タンス'.
+  8. Only identify 'washing_machine' if explicitly labeled '洗濯機'.
+  9. Only identify 'stairs' if labeled '階段', '2階へ', or clearly drawn.
+  10. Only identify 'shelf' if labeled '棚', 'ラック', 'Shelf', or 'Rack'.
+  11. Only identify 'bath' if labeled 'お風呂', '浴室', 'Bath', or 'Bathroom'.
+  12. Only identify 'small_table' if labeled 'テーブル（小）' or 'Table (Small)'.
+  13. Only identify 'single_swing_door' if labeled 'Door' or 'ドア' or visually clear.
+  14. Only identify 'folding_door' if labeled 'Folding Door' or '折り戸' or '折戸' (Common in Baths).
+  15. Only identify 'sliding_door' if labeled 'Sliding Door' or '引き戸' or '引戸'.
+  16. Only identify 'toilet' if labeled 'Toilet' or 'トイレ' or 'WC'.
+  17. Only identify 'wheelchair' if labeled 'Wheelchair', '車いす', '車椅子' or clearly drawn.
+  18. CRITICAL: If a room text says 'Flooring' or 'Tatami', INCLUDE IT in the 'name' field.
+  19. CRITICAL: 'total_rooms_detected' MUST ONLY count habitable rooms (Bedrooms, Living, Dining, Tatami Rooms). DO NOT count Hallways, Toilets, Baths, Genkan, or Storage/WIC as 'rooms' in this specific counter.
+  20. Detect 'Hallway' if labeled '廊下'/'ろうか' or if it is a connecting passage.
+final_assertion:
+  model_must_confirm:
+    - "I have not added any object not visibly present in the sketch."
+    - "I have correctly classified all special Japanese furniture types."
+    - "I have removed all unnecessary walls wrapping furniture."
+    - "I have verified that 1 sketch object = 1 yaml object (No duplicates)."
+`;
+
+        const BLUEPRINT_AUDIT_PROMPT = `
+ROLE: HOSTILE BLUEPRINT AUDITOR
+TASK: Perform a "Hyper-Max" Verification of a generated YAML blueprint against an original Source Sketch.
+OBJECTIVE:
+Compare the YAML data against the Sketch Image pixel-by-pixel. Calculate a QUALITY SCORE (0-100).
+SCORING RUBRIC (Deduct from 100):
+- IGNORED USER INSTRUCTION: -50 points. (ABSOLUTE PRIORITY: IF USER ASKED FOR A CHANGE AND IT IS MISSING, FAIL IMMEDIATELY)
+- DUPLICATE FIXTURES (Generating 2 items when only 1 exists): -40 points. (CRITICAL)
+- UNNECESSARY WALLS (Wrapping furniture or Partitioning small rooms): -30 points. (CRITICAL)
+- CRITICAL HALLUCINATION (Object in YAML but not in Image): -25 points.
+- CRITICAL OMISSION (Object in Image but not in YAML): -15 points.
+- WRONG FIXTURE TYPE: -20 points.
+- GEOMETRY ERROR: -5 points.
+AUDIT CHECKLIST:
+1. USER OVERRIDE CHECK: Did the user provide specific instructions (e.g., "Add door", "Fix room count")? IF YES, DID THE BLUEPRINT COMPLY? If no, FAIL (-50 pts).
+2. DUPLICATION CHECK: Are there 2 toilets listed? Are there 2 baths listed? If the sketch only shows 1, FAIL (-40 pts).
+3. WALL WRAPPING CHECK: Are there walls around the Cupboard/Fridge/Shelf? If yes, FAIL (-30 pts).
+4. ROOM INTERNAL CHECK: Are there random walls inside the Toilet or Bath room? If yes, FAIL (-30 pts).
+5. FIXTURE CLASSIFICATION: Did the YAML pick 'washing_machine' ONLY when the text said '洗濯機'?
+6. FIXTURE CLASSIFICATION: Did the YAML pick 'tansu' ONLY when the text said 'タンス'?
+7. FIXTURE CLASSIFICATION: Did the YAML pick 'stairs' ONLY when visible or labeled?
+8. FIXTURE CLASSIFICATION: Did the YAML pick 'shelf' ONLY when the text said '棚' or 'ラック'?
+9. FIXTURE CLASSIFICATION: Did the YAML pick 'bath' ONLY when the text said 'お風呂' or '浴室'?
+10. FIXTURE CLASSIFICATION: Did the YAML pick 'small_table' ONLY when the text said 'テーブル（小）'?
+11. OPENING CLASSIFICATION: Did the YAML pick 'single_swing_door' for 'Door'/'ドア'?
+12. OPENING CLASSIFICATION: Did the YAML pick 'folding_door' for 'Folding Door'/'折り戸'?
+13. OPENING CLASSIFICATION: Did the YAML pick 'sliding_door' for 'Sliding Door'/'引き戸'?
+14. FIXTURE CLASSIFICATION: Did the YAML pick 'toilet' for 'Toilet'/'トイレ'/'WC'?
+15. FIXTURE CLASSIFICATION: Did the YAML pick 'wheelchair' for 'Wheelchair'/'車いす'?
+OUTPUT FORMAT (Markdown):
+You MUST output the score on a specific line formatted as "**COMPLIANCE_SCORE**: <number>"
+## Audit Report
+**COMPLIANCE_SCORE**: [0-100]
+**Status**: [PASS / FAIL / WARNING]
+### Discrepancies Found:
+- [Critical] IGNORED USER INSTRUCTION: User asked for 3 rooms, found 2 (-50 pts).
+- [Critical] Duplicate Toilet generated (-40 pts).
+(Leave empty if perfect)
+`;
+
+        const CAD_STYLE_GUIDE = `
+KNOWLEDGE_BASE_INJECTION: PREMIUM_JAPANESE_REAL_ESTATE_PLANS_V2026
+QUALITY_BENCHMARK: "TARGET_LEVEL_MAXIMUM_FIDELITY"
+VISUAL_STYLE_DEFINITION:
+The output must STRICTLY mimic the visual style of professional Japanese "Mansion" (Condo) sales floor plans.
+Although output is MONOCHROME (Black/White), it must include RICH TEXTURAL DETAILS (Hatching) that define specific areas.
+1. TEXTURE MAPPING (STRICT WHITE FLOOR POLICY):
+   *** ABSOLUTE RULE: ALL FLOORS MUST BE SOLID WHITE BY DEFAULT ***
+   - DO NOT apply Wood Plank or Tile textures to Living, Dining, Bedroom, Kitchen, or Hallway UNLESS EXPLICITLY LABELED.
+   - EXCEPTION 1: If Room Name implies TATAMI (e.g., 'Tatami', 'Washitsu', '和室', '畳'), APPLY "Tatami Grid" hatching.
+   - EXCEPTION 2: If Room Name explicitly says FLOORING (e.g., 'Flooring', 'フローリング', '板の間'), APPLY "Wood Plank" hatching.
+   - EXCEPTION 3: BALCONY may use "Decking" or simple lines.
+   - EXCEPTION 4: UNIT BATH floor is part of the fixture, so it keeps its internal non-slip texture.
+   - GENKAN: Default to WHITE unless labeled 'Tile'.
+2. COMPONENT DEFINITIONS (HIGH PRECISION):
+   - WALLS: STRUCTURAL walls must be SOLID BLACK or DARK GREY FILL. Partition walls are double lines.
+   - COLUMNS: Distinct solid squares at corners.
+   - WINDOWS: Clear distinction of glass vs frame.
+   - DOORS: Quarter-circle arcs for swing direction.
+3. FIXTURE PRECISION (NO ABSTRACTION):
+   - TOILET: Tank + Oval Bowl + Control Panel on wall.
+   - BATHTUB: Outer rectangle + Inner rounded shape + Drain circle + Faucet.
+   - KITCHEN SINK: Rectangle + Inner bowl + Drain circle + Faucet line.
+   - STOVE: Square + 3 distinct burner circles.
+4. SPECIAL ROOM PROTOCOLS (STRICT):
+   PROTOCOL A: GENKAN (ENTRANCE) [DEFAULT]
+   *** APPLY IF ROOM IS 'GENKAN'/'玄関' ***
+   - VISUAL SOURCE: "Standard Genkan Image" (Shoe Rack + Mat + Shoes).
+   - CRITICAL BOUNDARY LOGIC: The generated Genkan assets (Rack, Shoes, Mat) MUST NOT EXCEED the room's bounding box.
+   - SHRINK-TO-FIT MANDATE: If the Genkan area is too small for the standard asset size, YOU MUST SHRINK THE SHOES AND RACK proportionally until they fit completely inside the walls. Do NOT crop them. Do NOT let them cross wall lines.
+   - SHOE RACK: Draw against one wall. It must be narrow.
+   - MAT AREA: Draw the 'Tataki' (lower floor area) explicitly.
+   - SHOE ARRANGEMENT: 
+     - Draw 3 pairs of shoes facing the door.
+     - IF ROOM IS NARROW: Reduce shoe size OR arrange in 2 rows.
+     - CONTAINMENT: Shoes must be strictly inside the 'Tataki' area.
+   PROTOCOL B: BED VARIANTS
+   - "BED #1" (NURSING) [DEFAULT]: 
+     - GEOMETRY: Single bed frame. 
+     - PILLOWS: STRICTLY 1 PILLOW. (2 pillows is FORBIDDEN for this type).
+     - DETAILS: SAFETY RAILS on sides, CONTROL PANEL on rail. Folded duvet.
+   - "BED #2" (STANDARD): 
+     - GEOMETRY: Single or Double frame.
+     - PILLOWS: 1 Pillow (Single) or 2 Pillows (Double) depending on size drawn.
+     - DETAILS: Headboard + Footboard. NO RAILS.
+   - "FUTON": Mattress on floor. Wavy duvet texture.
+   PROTOCOL C: DINING TABLE (DEFAULT)
+   *** APPLY IF FIXTURE IS 'dining_table' OR 'テーブル' ***
+   - VISUAL SOURCE: "Standard Dining Table Image" (Rectangular Wood Table + 6 Chairs).
+   - SHAPE: Rectangular table.
+   - CHAIR COUNT: Exactly 6 chairs.
+   - ARRANGEMENT: 3 chairs on one long side, 3 chairs on the opposite long side.
+   - PLACEMENT: Chairs must be 'tucked in' (front 30% of chair under the table).
+   PROTOCOL D: KOTATSU (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'kotatsu' ***
+   - VISUAL SOURCE: "Standard Kotatsu Image" (Square Blanket + Square Top Plate).
+   - GEOMETRY: Draw a large square representing the spread-out blanket (futon). The corners should be slightly rounded or show folds to indicate soft fabric.
+   - CENTER PIECE: Draw a smaller, solid square in the exact center representing the table top plate.
+   - TEXTURE: Apply a "Patchwork" or "Quilted" hatching pattern to the blanket area to match the reference image. The top plate should be solid/smooth.
+   PROTOCOL E: SYSTEM KITCHEN (DEFAULT)
+   *** APPLY IF ROOM/FIXTURE IS 'KITCHEN'/'キッチン' ***
+   - VISUAL SOURCE: "Standard System Kitchen Image".
+   - VIEWPOINT: Strict Top-Down 2D.
+   - COMPONENTS:
+     1. SINK: Rectangular with rounded corners, drain circle, faucet line.
+     2. STOVE: Square cooktop with 3 distinct circular burners (triangle formation).
+     3. WORKTOP: Clean empty space between sink and stove.
+   - SCALING: The unit MUST be scaled to fit exactly within the drawn rectangle in the sketch. It must NOT exceed the wall boundaries.
+   - ORIENTATION: Align against the wall indicated in the sketch.
+   PROTOCOL F: CUPBOARD (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'cupboard' OR '食器棚' ***
+   - VISUAL SOURCE: "Standard Range Board/Cupboard Image".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Wide rectangle placed against a wall.
+   - INTERNAL DIVISIONS: Divide the rectangle visually into two side-by-side sections (Left & Right).
+     - LEFT SECTION (Appliance Zone): Represent the counter space for Microwave/Rice Cooker.
+     - RIGHT SECTION (Dish Storage): Represent storage with crossed lines or shelving hatching.
+   - SCALING: Match the width drawn in the sketch.
+   PROTOCOL G: WASHBASIN (SENMENDAI) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'washbasin' OR '洗面台' ***
+   - VISUAL SOURCE: "Standard Washbasin Unit Image".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Rectangular unit.
+   - SINK SHAPE: Large, wide rectangular basin with rounded interior corners (beveled look).
+   - FAUCET: Center-mounted or wall-mounted projecting over basin.
+   - CONTROL PANEL: On the LEFT ledge of the counter, draw small buttons/panel.
+   - SOAP AREA: On the RIGHT ledge, indicate space or a small circle for soap.
+   - ORIENTATION: Back of unit against the wall.
+   PROTOCOL H: TANSU (CHEST) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'tansu' OR 'タンス' ***
+   - VISUAL SOURCE: "Standard Tansu/Chest Image" (Wide 8-drawer unit).
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Rectangular cabinet placed against a wall.
+   - DETAIL: Draw a line splitting the unit vertically (left/right columns). Indicate drawer handles on the front edge as small tick marks.
+   PROTOCOL I: WASHING MACHINE (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'washing_machine' OR '洗濯機' ***
+   - VISUAL SOURCE: "Standard Top-Load Washing Machine Image".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Square unit (approx 640x640mm equivalent).
+   - LID: Draw a rectangle in the center representing the folding lid.
+   - CONTROLS: Draw a control panel strip with small buttons at the FRONT edge of the unit.
+   - HOSE: Draw a corrugated hose indication at the rear/side corner.
+   PROTOCOL J: STAIRS (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'stairs' OR '階段' ***
+   - VISUAL SOURCE: "Standard Straight Staircase".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Rectangular area.
+   - STEPS: Draw a series of parallel horizontal lines spaced evenly (approx 12-14 risers).
+   - INDICATOR: Draw a clear arrow starting from the bottom pointing UP. Label 'UP' if possible.
+   - RAILS: Draw double lines on the sides for handrails.
+   PROTOCOL K: SHELF (TANA/RACK) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'shelf' OR '棚' OR 'ラック' ***
+   - VISUAL SOURCE: "Standard Open Shelf/Rack Image" (4-post frame with shelves).
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Rectangular frame.
+   - POSTS: Draw small solid squares at the 4 corners to represent the vertical posts.
+   - STRUCTURE: Draw a clear rectangle connecting the posts. The interior should be clear or have very subtle horizontal lines to suggest shelving tiers below, but primarily a clean open frame look.
+   PROTOCOL L: BATH (OFURO/YOKUSHITSU) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'bath' OR 'お風呂' OR '浴室' ***
+   - VISUAL SOURCE: "Standard Unit Bath System".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Rectangular area (Unit Bath).
+   - TUB: Inside the rectangle, draw the bathtub shape (rounded rectangle) occupying approx 60-70% of the width.
+   - SHOWER/FAUCET: On the wall adjacent to the tub or at the end of the tub, draw a distinct shower head symbol (circle with handle) and faucet.
+   - DRAIN: Small circle inside the tub at the faucet end.
+   - HANDRAILS: Draw thin double lines along the long inner sides of the tub to represent handrails if space permits.
+   - FLOOR: Apply 'Non-slip Tile' hatching to the floor area outside the tub.
+   PROTOCOL M: SMALL TABLE (TABLE_SMALL) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'small_table' OR 'テーブル（小）' ***
+   - VISUAL SOURCE: "Simple Rectangular Wooden Table".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY: Simple Rectangle.
+   - DETAILS: Draw 4 small circles at the very corners of the rectangle to represent the leg joints/accents visible on the top surface.
+   - TEXTURE: Apply "Wood Grain" hatching (wavy lines) to the table top.
+   
+   PROTOCOL N: DOOR (STANDARD) (CONDITIONAL)
+   *** APPLY IF OPENING IS 'single_swing_door' OR 'ドア' ***
+   - VISUAL SOURCE: "Standard Single Swing Door".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - CONFIGURATION:
+     1. LEAF: Draw a solid rectangle representing the door leaf, protruding at 90 degrees from the wall opening.
+     2. SWING ARC: Draw a thin quarter-circle arc connecting the tip of the leaf to the wall frame.
+     3. FRAMES: Draw small blocks at the wall connection points to represent the door jambs.
+   PROTOCOL O: FOLDING DOOR (ORIDO) (CONDITIONAL)
+   *** APPLY IF OPENING IS 'folding_door' OR '折り戸' ***
+   - VISUAL SOURCE: "V-Shape Folding Door".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - CONFIGURATION:
+     1. SHAPE: Draw TWO rectangular panels connected at a center hinge, forming a 'V' shape protruding into the room (typically the bath).
+     2. ANGLE: The angle between the two panels should be approximately 60-90 degrees.
+     3. FRAMES: Draw small blocks at the wall connection points.
+     4. NO ARC: Do NOT draw a large swing arc. A folding door slides/folds.
+   PROTOCOL P: SLIDING DOOR (HIKIDO) (CONDITIONAL)
+   *** APPLY IF OPENING IS 'sliding_door' OR '引き戸' ***
+   - VISUAL SOURCE: "Standard Sliding Door".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - CONFIGURATION:
+     1. GEOMETRY: Draw two parallel thin rectangles offset from each other.
+     2. PANEL: One solid rectangle represents the sliding panel (door).
+     3. RAIL/WALL: One thin line/rectangle represents the wall track parallel to the door.
+     4. OVERLAP: The panel should slightly overlap the wall/frame to indicate sliding mechanism.
+     5. NO ARC: Strictly linear geometry.
+   PROTOCOL Q: TOILET (STANDARD) (DEFAULT)
+   *** APPLY IF FIXTURE IS 'toilet' OR 'トイレ' ***
+   - VISUAL SOURCE: "Standard Western Tank Toilet".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY:
+     1. TANK: Rectangular box placed against the wall (approx 400mm wide x 200mm deep).
+     2. BOWL: Elongated oval shape extending forward from the center of the tank (approx 350mm wide x 500mm long).
+     3. CONTROL: Small panel or lever on the side of the tank or wall.
+     4. ORIENTATION: Back of tank MUST align with the wall.
+   PROTOCOL R: WHEELCHAIR (STANDARD) (CONDITIONAL)
+   *** APPLY IF FIXTURE IS 'wheelchair' OR '車いす' ***
+   - VISUAL SOURCE: "Standard Manual Wheelchair".
+   - VIEWPOINT: Strict Top-Down 2D Projection.
+   - GEOMETRY:
+     1. SEAT: Central square area with grid hatching (fabric).
+     2. LARGE WHEELS: Two long, thin parallel double-lines on the Left and Right sides (representing the vertical view of the wheels).
+     3. HAND RIMS: Thinner lines just outside the main wheels.
+     4. ARMRESTS: Rectangles situated just inside the wheels.
+     5. HANDLES: Two small protrusions at the rear.
+     6. FOOTRESTS: Two distinct rectangular plates at the front, angled slightly if possible, or straight.
+     7. CASTERS: Small circles at the front corners of the frame.
+5. VISUAL CONSTRAINT:
+   - OUTPUT: Black and White (Grayscale allowed for textures).
+   - LINE QUALITY: Vector-sharp. No sketching artifacts.
+`;
+
+        const CAD_GENERATION_PROMPT = `
+ROLE: Professional Architectural CAD Drafter.
+TASK: Redraw the provided floor plan sketch into a clean, professional Japanese-style real estate floor plan image.
+INPUTS:
+1. IMAGE: The hand-drawn sketch provided by the user.
+2. TEXT: A verified YAML blueprint describing the rooms and fixtures.
+STRICT VISUAL STYLE GUIDE:
+${CAD_STYLE_GUIDE}
+INSTRUCTIONS:
+1. ALIGNMENT: Align the generated image with the orientation of the input sketch.
+2. CLEANING: Remove all noise, eraser marks, and shaky lines. The output must be vector-sharp.
+3. ACCURACY: Strictly follow the YAML list for fixtures. Do not hallucinate items not in the YAML.
+4. TEXTURES: Apply the hatching patterns defined in the style guide (Tatami, Flooring, Tile).
+`;
+
+        const apiKey = ""; // Canvas runtime automatically injects the credential when empty string is used
+
+        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        async function fetchWithRetry(url, options, retries = 4, delay = 1500) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errText = await response.text().catch(() => '');
+                    const isRateLimit = response.status === 429 || response.status === 503 || errText.includes('429') || errText.toLowerCase().includes('quota');
+                    if (isRateLimit && retries > 0) {
+                        await wait(delay);
+                        return fetchWithRetry(url, options, retries - 1, delay * 2);
+                    }
+                    throw new Error(`API Error (${response.status}): ${errText || response.statusText}`);
+                }
+                return await response.json();
+            } catch (error) {
+                if (retries > 0) {
+                    await wait(delay);
+                    return fetchWithRetry(url, options, retries - 1, delay * 2);
+                }
+                throw error;
+            }
+        }
+
+        const extractBase64Info = (dataUrl) => {
+            const match = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+            if (match) {
+                return { mimeType: match[1], data: match[2] };
+            }
+            return {
+                mimeType: 'image/png',
+                data: dataUrl.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '')
+            };
+        };
+
+        const generateBlueprint = async (base64Image, additionalInstructions, previousReport) => {
+            const { mimeType, data: cleanBase64 } = extractBase64Info(base64Image);
+            let systemPrompt = BLUEPRINT_SYSTEM_DIRECTIVE;
+
+            if (previousReport) {
+                systemPrompt = `
+                !!! PERFORMANCE IMPROVEMENT CONTRACT !!!
+                PREVIOUS SCORE: ${previousReport.score}/100
+                PREVIOUS DISCREPANCIES: 
+                ${previousReport.raw_analysis}
+                MANDATORY CORRECTIONS FOR REGENERATION:
+                1. DUPLICATION PURGE: If the audit found "Duplicate" fixtures, you MUST remove the extras. ONE SYMBOL = ONE OBJECT.
+                2. WALL PURGE: If the audit found "Unnecessary Walls", you MUST delete the walls wrapping Cupboards/Fridges.
+                3. The new output MUST score HIGHER than ${previousReport.score}.
+                Failure to fix the listed errors is unacceptable.
+                !!! END CONTRACT !!!
+                ${BLUEPRINT_SYSTEM_DIRECTIVE}
+                `;
+            } else if (additionalInstructions) {
+                systemPrompt = `
+                !!! USER CORRECTION INSTRUCTIONS !!!
+                "${additionalInstructions}"
+                YOU MUST ADJUST THE GENERATION TO COMPLY WITH THIS FEEDBACK.
+                !!! END INSTRUCTIONS !!!
+                
+                ${BLUEPRINT_SYSTEM_DIRECTIVE}
+                `;
+            }
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: systemPrompt },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType === 'image/svg+xml' ? 'image/png' : mimeType,
+                                    data: cleanBase64
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.2,
+                    maxOutputTokens: 8192
+                }
+            };
+
+            const result = await fetchWithRetry(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const text = result?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || "No output generated.";
+            return text.replace(/^```yaml\s*/i, '').replace(/```\s*$/, '').trim();
+        };
+
+        const verifyBlueprint = async (base64Image, currentYaml, userInstructions) => {
+            const { mimeType, data: cleanBase64 } = extractBase64Info(base64Image);
+            let auditContext = BLUEPRINT_AUDIT_PROMPT;
+
+            if (userInstructions) {
+                auditContext += `\n\n*** USER OVERRIDE ACTIVE ***\nThe user explicitly requested: "${userInstructions}"\nYOU MUST VERIFY that the generated blueprint COMPLIES with this instruction. IF IT DOES NOT, DEDUCT 50 POINTS.`;
+            }
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: auditContext },
+                            { text: `--- GENERATED YAML BLUEPRINT TO AUDIT ---\n${currentYaml}` },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType === 'image/svg+xml' ? 'image/png' : mimeType,
+                                    data: cleanBase64
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 4096
+                }
+            };
+
+            const result = await fetchWithRetry(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const text = result?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || "";
+            const scoreMatch = text.match(/\*\*COMPLIANCE_SCORE\*\*:\s*(\d+)/i) || text.match(/COMPLIANCE_SCORE[^\d]*(\d+)/i);
+            const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 85;
+
+            let status = 'FAIL';
+            if (score >= 90) status = 'PASS';
+            else if (score >= 70) status = 'WARNING';
+
+            const discrepancyLines = text
+                .split('\n')
+                .filter(line => line.trim().startsWith('- [') || line.trim().startsWith('* ['))
+                .map(line => line.trim().replace(/^[-*]\s*/, ''));
+
+            return {
+                status,
+                score,
+                discrepancies: discrepancyLines,
+                raw_analysis: text
+            };
+        };
+
+        const generateCadImage = async (base64Image, blueprintYaml, additionalInstructions) => {
+            const { mimeType, data: cleanBase64 } = extractBase64Info(base64Image);
+            let promptWithKnowledgeBase = `${CAD_GENERATION_PROMPT}\n\n--- INPUT BLUEPRINT ---\n${blueprintYaml}`;
+
+            if (additionalInstructions) {
+                promptWithKnowledgeBase += `\n\n!!! FINAL USER RENDERING INSTRUCTIONS !!!\n${additionalInstructions}\n!!! COMPLY WITH ABOVE !!!`;
+            }
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: promptWithKnowledgeBase },
+                            {
+                                inlineData: {
+                                    mimeType: mimeType === 'image/svg+xml' ? 'image/png' : mimeType,
+                                    data: cleanBase64
+                                }
+                            }
+                        ]
+                    }
+                ],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    temperature: 0.1
+                }
+            };
+
+            const modelsToTry = [
+                'gemini-3.1-flash-image',
+                'gemini-3.1-flash-lite-image'
+            ];
+
+            let lastError = null;
+            for (const modelName of modelsToTry) {
+                try {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                    const result = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }, 2, 1500);
+
+                    const parts = result?.candidates?.[0]?.content?.parts || [];
+                    for (const part of parts) {
+                        if (part.inlineData && part.inlineData.data) {
+                            return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+                        }
+                    }
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+
+            throw lastError || new Error("CAD画像の生成に失敗しました。もう一度お試しください。");
+        };
+
+        const createSampleSketchDataUrl = (presetId) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1000;
+            canvas.height = 750;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return '';
+
+            ctx.fillStyle = '#fdfbf7';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.strokeStyle = '#ece6d9';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 50) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            }
+
+            const drawSketchLine = (x1, y1, x2, y2, width = 5, color = '#1e293b') => {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                const midX = (x1 + x2) / 2 + (Math.random() * 3 - 1.5);
+                const midY = (y1 + y2) / 2 + (Math.random() * 3 - 1.5);
+                ctx.quadraticCurveTo(midX, midY, x2, y2);
+                ctx.stroke();
+            };
+
+            const drawSketchRect = (x, y, w, h, width = 4, color = '#1e293b') => {
+                drawSketchLine(x, y, x + w, y, width, color);
+                drawSketchLine(x + w, y, x + w, y + h, width, color);
+                drawSketchLine(x + w, y + h, x, y + h, width, color);
+                drawSketchLine(x, y + h, x, y, width, color);
+            };
+
+            const drawText = (text, x, y, size = 24, color = '#0f172a') => {
+                ctx.font = `bold ${size}px "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif`;
+                ctx.fillStyle = color;
+                ctx.fillText(text, x, y);
+            };
+
+            if (presetId === 'nursing_home') {
+                drawSketchRect(100, 80, 800, 580, 8);
+                drawSketchLine(100, 320, 720, 320, 6);
+                drawSketchLine(100, 440, 720, 440, 6);
+                drawText('廊下 (Hallway)', 340, 390, 26, '#334155');
+
+                drawSketchLine(480, 80, 480, 320, 6);
+                drawText('洋室 (フローリング)', 140, 125, 22);
+                drawSketchRect(140, 150, 180, 110, 3, '#334155');
+                drawSketchRect(150, 165, 35, 80, 2, '#475569');
+                drawText('ベッド', 200, 215, 20);
+                
+                ctx.beginPath();
+                ctx.arc(390, 210, 32, 0, Math.PI * 2);
+                ctx.stroke();
+                drawSketchLine(352, 180, 352, 240, 4, '#334155');
+                drawSketchLine(428, 180, 428, 240, 4, '#334155');
+                drawText('車いす', 360, 270, 20);
+
+                drawSketchLine(260, 315, 340, 315, 4, '#0284c7');
+                drawSketchLine(310, 325, 390, 325, 4, '#0284c7');
+                drawText('引き戸', 295, 305, 16, '#0284c7');
+
+                drawSketchLine(720, 80, 720, 660, 6);
+                drawSketchLine(480, 210, 720, 210, 5);
+                drawText('トイレ (WC)', 540, 115, 20);
+                drawSketchRect(660, 115, 40, 65, 3);
+                ctx.beginPath();
+                ctx.ellipse(625, 147, 32, 22, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                drawSketchRect(500, 220, 75, 45, 3);
+                drawText('洗面台', 505, 290, 18);
+                drawSketchRect(620, 220, 65, 65, 3);
+                drawText('洗濯機', 625, 305, 18);
+
+                drawSketchLine(720, 320, 900, 320, 6);
+                drawText('浴室 (お風呂)', 745, 125, 22);
+                drawSketchRect(745, 150, 135, 140, 3);
+                drawSketchLine(720, 240, 745, 260, 3, '#0284c7');
+                drawSketchLine(745, 260, 720, 280, 3, '#0284c7');
+                drawText('折り戸', 735, 235, 16, '#0284c7');
+
+                drawText('LDK (フローリング)', 135, 485, 24);
+                drawSketchRect(130, 520, 210, 75, 4);
+                drawText('キッチン', 185, 565, 20);
+                drawSketchRect(130, 610, 140, 38, 3);
+                drawText('食器棚', 165, 636, 18);
+                drawSketchRect(440, 500, 180, 110, 4);
+                drawText('テーブル', 485, 560, 22);
+
+                drawText('玄関 (Genkan)', 740, 520, 22);
+                drawSketchRect(855, 470, 35, 130, 3);
+                drawText('下駄箱', 790, 560, 16);
+                drawSketchLine(770, 660, 770, 600, 4, '#0284c7');
+                ctx.beginPath();
+                ctx.arc(770, 660, 60, -Math.PI / 2, 0);
+                ctx.stroke();
+                drawText('ドア', 785, 645, 18, '#0284c7');
+
+            } else if (presetId === 'japanese_washitsu') {
+                drawSketchRect(100, 80, 800, 580, 8);
+                drawSketchLine(500, 80, 500, 660, 6);
+                drawSketchLine(100, 380, 500, 380, 6);
+
+                drawText('和室 8畳 (畳)', 140, 130, 24);
+                drawSketchRect(220, 175, 140, 140, 4);
+                drawSketchRect(255, 210, 70, 70, 3);
+                drawText('こたつ', 258, 252, 20);
+                drawSketchRect(360, 90, 120, 45, 3);
+                drawText('タンス', 390, 120, 18);
+
+                drawText('和室 (畳)', 140, 430, 24);
+                drawSketchRect(150, 460, 160, 100, 3);
+                drawText('布団', 205, 518, 22);
+                drawSketchRect(360, 490, 90, 65, 3);
+                drawText('テーブル（小）', 345, 580, 18);
+
+                drawText('リビング (フローリング)', 540, 135, 24);
+                drawSketchRect(770, 120, 100, 240, 4);
+                for (let y = 145; y < 350; y += 22) {
+                    drawSketchLine(770, y, 870, y, 2);
+                }
+                drawText('階段 (2階へ)', 745, 390, 20);
+
+                drawSketchRect(530, 180, 130, 45, 3);
+                drawText('棚・ラック', 545, 210, 18);
+
+                drawSketchRect(560, 450, 190, 120, 4);
+                drawText('テーブル', 610, 515, 22);
+
+                drawSketchLine(495, 210, 495, 280, 4, '#0284c7');
+                drawSketchLine(505, 250, 505, 320, 4, '#0284c7');
+                drawText('引き戸', 435, 265, 16, '#0284c7');
+
+            } else {
+                drawSketchRect(120, 90, 760, 560, 8);
+                drawSketchLine(460, 90, 460, 420, 6);
+                drawSketchLine(120, 420, 880, 420, 6);
+
+                drawText('寝室 (フローリング)', 155, 140, 22);
+                drawSketchRect(160, 175, 190, 140, 4);
+                drawSketchRect(172, 190, 35, 48, 2);
+                drawSketchRect(172, 250, 35, 48, 2);
+                drawText('Bed ②', 235, 250, 22);
+
+                drawSketchLine(680, 90, 680, 420, 6);
+                drawText('浴室', 745, 145, 22);
+                drawSketchRect(705, 175, 150, 160, 3);
+                drawSketchLine(460, 240, 680, 240, 5);
+                drawText('トイレ', 530, 135, 20);
+                drawSketchRect(620, 135, 38, 60, 3);
+                ctx.beginPath();
+                ctx.ellipse(585, 165, 28, 20, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                drawSketchRect(490, 265, 85, 50, 3);
+                drawText('洗面台', 500, 340, 18);
+
+                drawText('LDK (フローリング)', 160, 470, 24);
+                drawSketchRect(160, 505, 240, 80, 4);
+                drawText('キッチン', 235, 552, 22);
+                drawSketchRect(520, 480, 200, 115, 4);
+                drawText('テーブル', 575, 545, 22);
+            }
+
+            return canvas.toDataURL('image/png');
+        };
+
+        const parseYamlBlueprint = (yamlText) => {
+            if (!yamlText) return { inventory: {}, walls: [], fixtures: [], openings: [], rooms: [] };
+
+            const inventory = {};
+            const invMatches = yamlText.matchAll(/^\s*(total_[a-z_]+_detected):\s*(\d+)/gm);
+            for (const match of invMatches) {
+                inventory[match[1]] = parseInt(match[2], 10);
+            }
+
+            const walls = [];
+            const wallBlocks = yamlText.split(/-\s*id:\s*["']?W_/i).slice(1);
+            wallBlocks.forEach((block, idx) => {
+                const startMatch = block.match(/start:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/);
+                const endMatch = block.match(/end:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/);
+                const typeMatch = block.match(/type:\s*["']?([a-z_]+)["']?/i);
+                if (startMatch && endMatch) {
+                    walls.push({
+                        id: `W_${idx + 1}`,
+                        x1: parseFloat(startMatch[1]),
+                        y1: parseFloat(startMatch[2]),
+                        x2: parseFloat(endMatch[1]),
+                        y2: parseFloat(endMatch[2]),
+                        type: typeMatch ? typeMatch[1] : 'structural'
+                    });
+                }
+            });
+
+            const fixtures = [];
+            const fixtureBlocks = yamlText.split(/-\s*id:\s*["']?F_/i).slice(1);
+            fixtureBlocks.forEach((block, idx) => {
+                const typeMatch = block.match(/type:\s*["']?([a-z0-9_]+)["']?/i);
+                const boundsMatch = block.match(/bounds:\s*\[\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]\s*,\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]\s*\]/);
+                if (boundsMatch) {
+                    fixtures.push({
+                        id: `F_${idx + 1}`,
+                        type: typeMatch ? typeMatch[1] : 'fixture',
+                        x1: parseFloat(boundsMatch[1]),
+                        y1: parseFloat(boundsMatch[2]),
+                        x2: parseFloat(boundsMatch[3]),
+                        y2: parseFloat(boundsMatch[4]),
+                    });
+                }
+            });
+
+            const openings = [];
+            const openingBlocks = yamlText.split(/-\s*id:\s*["']?D_/i).slice(1);
+            openingBlocks.forEach((block, idx) => {
+                const typeMatch = block.match(/type:\s*["']?([a-z0-9_]+)["']?/i);
+                const posMatch = block.match(/center_position:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/);
+                if (posMatch) {
+                    openings.push({
+                        id: `D_${idx + 1}`,
+                        type: typeMatch ? typeMatch[1] : 'door',
+                        x: parseFloat(posMatch[1]),
+                        y: parseFloat(posMatch[2])
+                    });
+                }
+            });
+
+            const rooms = [];
+            const roomBlocks = yamlText.split(/-\s*id:\s*["']?R_/i).slice(1);
+            roomBlocks.forEach((block, idx) => {
+                const nameMatch = block.match(/name:\s*["']?([^"'\n]+)["']?/i);
+                if (nameMatch) {
+                    rooms.push({ id: `R_${idx + 1}`, name: nameMatch[1].trim() });
+                }
+            });
+
+            return { inventory, walls, fixtures, openings, rooms };
+        };
+
+        const InteractiveSketchModal = ({ isOpen, onClose, onApplySketch }) => {
+            const canvasRef = useRef(null);
+            const [tool, setTool] = useState('wall');
+            const [selectedStamp, setSelectedStamp] = useState('ベッド');
+            const [isDrawing, setIsDrawing] = useState(false);
+            const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+            const [snapshot, setSnapshot] = useState(null);
+
+            const stamps = [
+                { label: 'ベッド (介護)', text: 'ベッド', w: 140, h: 90 },
+                { label: 'Bed ② (一般)', text: 'Bed ②', w: 140, h: 100 },
+                { label: '車いす', text: '車いす', w: 75, h: 75 },
+                { label: 'トイレ (WC)', text: 'トイレ', w: 80, h: 110 },
+                { label: '浴室 (お風呂)', text: '浴室', w: 150, h: 150 },
+                { label: 'キッチン', text: 'キッチン', w: 190, h: 70 },
+                { label: '食器棚', text: '食器棚', w: 120, h: 45 },
+                { label: 'テーブル', text: 'テーブル', w: 150, h: 100 },
+                { label: 'こたつ', text: 'こたつ', w: 120, h: 120 },
+                { label: '洗面台', text: '洗面台', w: 75, h: 50 },
+                { label: '洗濯機', text: '洗濯機', w: 65, h: 65 },
+                { label: 'タンス', text: 'タンス', w: 110, h: 45 },
+                { label: '階段', text: '階段', w: 90, h: 180 },
+                { label: '和室 (畳)', text: '和室 (畳)', w: 0, h: 0 },
+                { label: '洋室 (フローリング)', text: '洋室 (フローリング)', w: 0, h: 0 },
+                { label: '廊下', text: '廊下', w: 0, h: 0 },
+                { label: '玄関', text: '玄関', w: 0, h: 0 },
+                { label: 'ドア', text: 'ドア', w: 60, h: 60 },
+                { label: '引き戸', text: '引き戸', w: 80, h: 20 },
+                { label: '折り戸', text: '折り戸', w: 60, h: 35 }
+            ];
+
+            const initCanvas = useCallback(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#f1f5f9';
+                ctx.lineWidth = 1;
+                for (let x = 0; x < canvas.width; x += 40) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+                }
+                for (let y = 0; y < canvas.height; y += 40) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+                }
+            }, []);
+
+            useEffect(() => {
+                if (isOpen) {
+                    setTimeout(initCanvas, 50);
+                }
+            }, [isOpen, initCanvas]);
+
+            if (!isOpen) return null;
+
+            const getCoords = (e) => {
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: ((clientX - rect.left) / rect.width) * canvas.width,
+                    y: ((clientY - rect.top) / rect.height) * canvas.height
+                };
+            };
+
+            const handlePointerDown = (e) => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const pos = getCoords(e);
+
+                if (tool === 'stamp') {
+                    const item = stamps.find(s => s.label === selectedStamp) || stamps[0];
+                    ctx.save();
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.fillStyle = '#0f172a';
+                    ctx.lineWidth = 3;
+                    if (item.w > 0 && item.h > 0) {
+                        ctx.strokeRect(pos.x - item.w / 2, pos.y - item.h / 2, item.w, item.h);
+                    }
+                    ctx.font = 'bold 20px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(item.text, pos.x, pos.y);
+                    ctx.restore();
+                    return;
+                }
+
+                setIsDrawing(true);
+                setStartPos(pos);
+                setSnapshot(ctx.getImageData(0, 0, canvas.width, canvas.height));
+
+                if (tool === 'pen' || tool === 'eraser') {
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                }
+            };
+
+            const handlePointerMove = (e) => {
+                if (!isDrawing) return;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const pos = getCoords(e);
+
+                if (tool === 'pen') {
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.lineWidth = 5;
+                    ctx.lineCap = 'round';
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                } else if (tool === 'eraser') {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 28;
+                    ctx.lineCap = 'round';
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                } else if (tool === 'wall' && snapshot) {
+                    ctx.putImageData(snapshot, 0, 0);
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 7;
+                    ctx.strokeRect(
+                        Math.min(startPos.x, pos.x),
+                        Math.min(startPos.y, pos.y),
+                        Math.abs(pos.x - startPos.x),
+                        Math.abs(pos.y - startPos.y)
+                    );
+                }
+            };
+
+            const handlePointerUp = () => {
+                setIsDrawing(false);
+            };
+
+            const handleExport = () => {
+                const canvas = canvasRef.current;
+                if (canvas) {
+                    onApplySketch(canvas.toDataURL('image/png'));
+                    onClose();
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-5xl w-full overflow-hidden flex flex-col max-h-[92vh]">
+                        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <PenTool className="w-5 h-5 text-sky-400" />
+                                <div>
+                                    <h3 className="font-bold text-base">インタラクティブ手描き間取りスケッチパッド</h3>
+                                    <p className="text-xs text-slate-400">矩形壁ツールと建築スタンプで素早く手描き風の間取りを作成し、AI解析へ送信できます</p>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white text-sm px-3 py-1 rounded-lg bg-slate-800">
+                                閉じる
+                            </button>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setTool('wall')} className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${tool === 'wall' ? 'bg-sky-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200'}`}>
+                                    <Box className="w-3.5 h-3.5" /> 部屋・壁 (ドラッグで矩形)
+                                </button>
+                                <button onClick={() => setTool('pen')} className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${tool === 'pen' ? 'bg-sky-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200'}`}>
+                                    <PenTool className="w-3.5 h-3.5" /> フリーハンド線
+                                </button>
+                                <button onClick={() => setTool('stamp')} className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${tool === 'stamp' ? 'bg-sky-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200'}`}>
+                                    <PlusCircle className="w-3.5 h-3.5" /> 設備・部屋名スタンプ
+                                </button>
+                                <button onClick={() => setTool('eraser')} className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${tool === 'eraser' ? 'bg-rose-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200'}`}>
+                                    <Trash2 className="w-3.5 h-3.5" /> 消しゴム
+                                </button>
+                            </div>
+
+                            {tool === 'stamp' && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-slate-500">配置スタンプ:</span>
+                                    <select value={selectedStamp} onChange={(e) => setSelectedStamp(e.target.value)} className="text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-800">
+                                        {stamps.map((s) => (
+                                            <option key={s.label} value={s.label}>{s.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                                <button onClick={initCanvas} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-100">
+                                    全消去
+                                </button>
+                                <button onClick={handleExport} className="px-4 py-2 rounded-lg text-xs font-bold bg-sky-600 text-white hover:bg-sky-700 shadow-md flex items-center gap-1.5">
+                                    <Check className="w-4 h-4" /> このスケッチをAI解析する
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 bg-slate-200 p-4 flex items-center justify-center overflow-auto">
+                            <canvas
+                                ref={canvasRef}
+                                width={900}
+                                height={600}
+                                onMouseDown={handlePointerDown}
+                                onMouseMove={handlePointerMove}
+                                onMouseUp={handlePointerUp}
+                                onMouseLeave={handlePointerUp}
+                                onTouchStart={handlePointerDown}
+                                onTouchMove={handlePointerMove}
+                                onTouchEnd={handlePointerUp}
+                                className="bg-white rounded-xl shadow-lg border border-slate-300 cursor-crosshair max-w-full h-auto"
+                            />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ImageUpload = ({ onImageSelected, onOpenSketchPad }) => {
+            const handleFileChange = useCallback((event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const result = reader.result;
+                        if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.width || 1000;
+                                canvas.height = img.height || 1000;
+                                const ctx = canvas.getContext('2d');
+                                if (ctx) {
+                                    ctx.fillStyle = '#ffffff';
+                                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                    const pngData = canvas.toDataURL('image/png');
+                                    onImageSelected(pngData);
+                                }
+                            };
+                            img.src = result;
+                        } else {
+                            onImageSelected(result);
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }, [onImageSelected]);
+
+            const handleLoadSample = (presetId) => {
+                const sampleDataUrl = createSampleSketchDataUrl(presetId);
+                if (sampleDataUrl) {
+                    onImageSelected(sampleDataUrl);
+                }
+            };
+
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-between p-4 border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/70 hover:bg-slate-100/70 transition-colors">
+                    <div className="flex flex-col items-center justify-center my-auto text-center">
+                        <div className="bg-white p-3.5 rounded-full shadow-sm mb-3 border border-slate-100">
+                            <Upload className="w-7 h-7 text-sky-600" />
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-800 mb-1">手描き間取りスケッチを入力</h3>
+                        <p className="text-slate-500 text-center mb-4 max-w-xs text-xs leading-relaxed">
+                            手書きの平面図画像（JPG, PNG, SVG）をアップロードするか、下のサンプル／作図パッドで即座にテストできます。
+                        </p>
+
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <input
+                                type="file"
+                                accept="image/png, image/jpeg, image/jpg, image/webp, image/svg+xml"
+                                onChange={handleFileChange}
+                                className="hidden"
+                                id="file-upload"
+                            />
+                            <label htmlFor="file-upload" className="cursor-pointer bg-sky-600 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-sky-700 transition-colors shadow-sm flex items-center gap-1.5">
+                                <Upload className="w-3.5 h-3.5" /> ファイルを選択
+                            </label>
+                            <button onClick={onOpenSketchPad} className="bg-slate-800 text-white px-3.5 py-2 rounded-lg text-xs font-semibold hover:bg-slate-900 transition-colors shadow-sm flex items-center gap-1.5">
+                                <PenTool className="w-3.5 h-3.5" /> その場で手描き作図
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="w-full pt-3 border-t border-slate-200/80">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 text-center">
+                            ワンクリック検証用サンプルスケッチ
+                        </p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                            <button onClick={() => handleLoadSample('nursing_home')} className="p-2 rounded-lg bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 text-left transition-all group">
+                                <div className="text-[11px] font-bold text-slate-700 group-hover:text-sky-700 truncate">① 介護・車いす邸</div>
+                                <div className="text-[10px] text-slate-400 truncate">車椅子・介護ベッド・廊下</div>
+                            </button>
+                            <button onClick={() => handleLoadSample('japanese_washitsu')} className="p-2 rounded-lg bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 text-left transition-all group">
+                                <div className="text-[11px] font-bold text-slate-700 group-hover:text-sky-700 truncate">② 和室・こたつ邸</div>
+                                <div className="text-[10px] text-slate-400 truncate">畳・布団・タンス・階段</div>
+                            </button>
+                            <button onClick={() => handleLoadSample('urban_1ldk')} className="p-2 rounded-lg bg-white hover:bg-sky-50 border border-slate-200 hover:border-sky-300 text-left transition-all group">
+                                <div className="text-[11px] font-bold text-slate-700 group-hover:text-sky-700 truncate">③ 都市型1LDK</div>
+                                <div className="text-[10px] text-slate-400 truncate">Bed②・UB・対面LDK</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const BlueprintDisplay = ({ yaml, onChangeYaml, loading }) => {
+            const [activeTab, setActiveTab] = useState('yaml');
+            const [isEditing, setIsEditing] = useState(false);
+            const [copied, setCopied] = useState(false);
+
+            const parsed = useMemo(() => parseYamlBlueprint(yaml), [yaml]);
+
+            const handleCopy = () => {
+                if (!yaml) return;
+                const textArea = document.createElement("textarea");
+                textArea.value = yaml;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const handleDownloadYaml = () => {
+                if (!yaml) return;
+                const blob = new Blob([yaml], { type: 'text/yaml;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'structural-blueprint.yaml';
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const activeInventoryEntries = Object.entries(parsed.inventory).filter(([, val]) => val > 0);
+
+            return (
+                <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                            <Code className="w-4 h-4 text-sky-600" />
+                            <h3 className="font-bold text-slate-800 text-xs sm:text-sm">Phase 1: Structural Blueprint</h3>
+                        </div>
+
+                        {yaml && (
+                            <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg">
+                                <button onClick={() => setActiveTab('yaml')} className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${activeTab === 'yaml' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                                    YAMLコード
+                                </button>
+                                <button onClick={() => setActiveTab('vector')} className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${activeTab === 'vector' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                                    <Grid className="w-3 h-3" /> 2D幾何プレビュー
+                                </button>
+                                <button onClick={() => setActiveTab('inventory')} className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1 ${activeTab === 'inventory' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                                    <Layers className="w-3 h-3" /> 検出インベントリ ({activeInventoryEntries.length})
+                                </button>
+                            </div>
+                        )}
+
+                        {yaml && (
+                            <div className="flex items-center gap-1">
+                                {activeTab === 'yaml' && (
+                                    <button onClick={() => setIsEditing(!isEditing)} title="YAMLを手動編集" className={`p-1.5 rounded-lg text-xs font-medium flex items-center gap-1 border ${isEditing ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'}`}>
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">{isEditing ? '編集完了' : '手動補正'}</span>
+                                    </button>
+                                )}
+                                <button onClick={handleCopy} title="YAMLをコピー" className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs">
+                                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                                <button onClick={handleDownloadYaml} title="YAMLを保存" className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs">
+                                    <Download className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1 overflow-auto p-0 relative bg-slate-950">
+                        {loading ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/90 backdrop-blur-sm z-10">
+                                <div className="flex flex-col items-center text-center p-6">
+                                    <div className="w-10 h-10 border-4 border-sky-400/30 border-t-sky-400 rounded-full animate-spin mb-3"></div>
+                                    <p className="text-sm font-bold text-sky-300 animate-pulse">幾何構造と設備シンボルを厳密解析中...</p>
+                                    <p className="text-xs text-slate-400 mt-1">重複排除プロトコル・壁囲い排除ルール・福祉機器判定を適用しています</p>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {!yaml ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 bg-white">
+                                <FileText className="w-12 h-12 mb-3 opacity-20" />
+                                <p className="text-sm font-medium text-center text-slate-500">手描きスケッチの入力を待機中...</p>
+                                <p className="text-xs text-slate-400 text-center mt-1">左パネルから画像をアップロードするか、ワンクリック検証サンプルを選択してください</p>
+                            </div>
+                        ) : activeTab === 'yaml' ? (
+                            isEditing ? (
+                                <textarea
+                                    value={yaml}
+                                    onChange={(e) => onChangeYaml(e.target.value)}
+                                    className="w-full h-full p-4 bg-slate-950 text-amber-200 font-mono text-xs leading-relaxed outline-none resize-none"
+                                    spellCheck={false}
+                                />
+                            ) : (
+                                <pre className="p-4 text-xs font-mono text-sky-100 leading-relaxed whitespace-pre-wrap select-all">
+                                    {yaml}
+                                </pre>
+                            )
+                        ) : activeTab === 'vector' ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-slate-900">
+                                <div className="w-full flex items-center justify-between text-xs text-slate-400 mb-2 px-2">
+                                    <span>座標系: 1000 × 1000 正規化グリッド</span>
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 inline-block bg-sky-400 rounded-sm"></span> 壁 ({parsed.walls.length})</span>
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 inline-block bg-emerald-400 rounded-sm"></span> 設備・家具 ({parsed.fixtures.length})</span>
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 inline-block bg-amber-400 rounded-full"></span> 建具・開口 ({parsed.openings.length})</span>
+                                    </div>
+                                </div>
+                                <svg viewBox="0 0 1000 1000" className="w-full h-full max-h-[380px] bg-slate-950 rounded-lg border border-slate-800 shadow-inner">
+                                    <defs>
+                                        <pattern id="blueprint-grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                                            <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#1e293b" strokeWidth="2" />
+                                        </pattern>
+                                    </defs>
+                                    <rect width="1000" height="1000" fill="url(#blueprint-grid)" />
+                                    {parsed.fixtures.map((f) => {
+                                        const x = Math.min(f.x1, f.x2);
+                                        const y = Math.min(f.y1, f.y2);
+                                        const w = Math.max(20, Math.abs(f.x2 - f.x1));
+                                        const h = Math.max(20, Math.abs(f.y2 - f.y1));
+                                        return (
+                                            <g key={f.id}>
+                                                <rect x={x} y={y} width={w} height={h} fill="rgba(16, 185, 129, 0.18)" stroke="#10b981" strokeWidth="4" rx="6" />
+                                                <text x={x + w / 2} y={y + h / 2} fill="#6ee7b7" fontSize="22" fontWeight="bold" textAnchor="middle" dominantBaseline="middle">
+                                                    {f.type}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
+                                    {parsed.walls.map((w) => (
+                                        <line key={w.id} x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} stroke={w.type === 'structural' ? '#38bdf8' : '#94a3b8'} strokeWidth={w.type === 'structural' ? '12' : '7'} strokeLinecap="square" />
+                                    ))}
+                                    {parsed.openings.map((o) => (
+                                        <g key={o.id}>
+                                            <circle cx={o.x} cy={o.y} r="18" fill="rgba(245, 158, 11, 0.25)" stroke="#f59e0b" strokeWidth="4" />
+                                            <text x={o.x} y={o.y - 24} fill="#fcd34d" fontSize="18" textAnchor="middle">{o.type.replace('_door', '')}</text>
+                                        </g>
+                                    ))}
+                                </svg>
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-white h-full overflow-auto space-y-4">
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">厳密カウント検証済みインベントリ (Inventory Check)</h4>
+                                    {activeInventoryEntries.length === 0 ? (
+                                        <p className="text-xs text-slate-400">インベントリ項目が見つかりません</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {activeInventoryEntries.map(([key, count]) => {
+                                                const cleanLabel = key.replace('total_', '').replace('_detected', '').replace(/_/g, ' ');
+                                                return (
+                                                    <div key={key} className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
+                                                        <span className="text-xs font-medium text-slate-700 capitalize truncate pr-2">{cleanLabel}</span>
+                                                        <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 font-mono text-xs font-bold">{count}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                                {parsed.rooms.length > 0 && (
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">検出された部屋・空間および床材属性 ({parsed.rooms.length})</h4>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {parsed.rooms.map((r) => (
+                                                <span key={r.id} className="px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold">
+                                                    {r.id}: {r.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const CadDisplay = ({ imageUrl, sketchImage, loading }) => {
+            const [viewMode, setViewMode] = useState('cad');
+            const [sliderPos, setSliderPos] = useState(50);
+            const [overlayOpacity, setOverlayOpacity] = useState(40);
+            const [zoom, setZoom] = useState(1);
+
+            return (
+                <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                            <ImageIcon className="w-4 h-4 text-purple-600" />
+                            <h3 className="font-bold text-slate-800 text-xs sm:text-sm">Phase 2: CAD Output</h3>
+                        </div>
+
+                        {imageUrl && (
+                            <div className="flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg">
+                                <button onClick={() => setViewMode('cad')} className={`px-2 py-1 rounded text-[11px] font-semibold transition-all ${viewMode === 'cad' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600'}`}>完成CAD図</button>
+                                <button onClick={() => setViewMode('split')} className={`px-2 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1 ${viewMode === 'split' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-600'}`}>
+                                    <SplitSquareHorizontal className="w-3 h-3" /> 比較ワイプ
+                                </button>
+                                <button onClick={() => setViewMode('overlay')} className={`px-2 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1 ${viewMode === 'overlay' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600'}`}>
+                                    <Layers className="w-3 h-3" /> 透過重ね合わせ
+                                </button>
+                            </div>
+                        )}
+
+                        {imageUrl && (
+                            <div className="flex items-center gap-1.5">
+                                <button onClick={() => setZoom(z => Math.max(0.75, +(z - 0.25).toFixed(2)))} className="p-1 rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100" title="縮小">
+                                    <ZoomOut className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-[11px] font-mono text-slate-500 min-w-[38px] text-center">{Math.round(zoom * 100)}%</span>
+                                <button onClick={() => setZoom(z => Math.min(2.5, +(z + 0.25).toFixed(2)))} className="p-1 rounded bg-white border border-slate-200 text-slate-600 hover:bg-slate-100" title="拡大">
+                                    <ZoomIn className="w-3.5 h-3.5" />
+                                </button>
+                                <a href={imageUrl} download="floorplan-cad-v2026.png" className="text-xs flex items-center gap-1 bg-sky-600 text-white px-2.5 py-1 rounded-lg hover:bg-sky-700 font-semibold shadow-sm">
+                                    <Download className="w-3 h-3" /> 保存
+                                </a>
+                            </div>
+                        )}
+                    </div>
+
+                    {imageUrl && viewMode === 'split' && (
+                        <div className="px-4 py-1.5 bg-purple-50 border-b border-purple-100 flex items-center gap-3 text-xs">
+                            <span className="font-semibold text-purple-800 whitespace-nowrap">手描き ⇔ CAD 比較スライダー:</span>
+                            <input type="range" min="0" max="100" value={sliderPos} onChange={(e) => setSliderPos(Number(e.target.value))} className="w-full accent-purple-600 cursor-pointer" />
+                            <span className="font-mono text-purple-700 w-10 text-right">{sliderPos}%</span>
+                        </div>
+                    )}
+
+                    {imageUrl && viewMode === 'overlay' && (
+                        <div className="px-4 py-1.5 bg-sky-50 border-b border-sky-100 flex items-center gap-3 text-xs">
+                            <span className="font-semibold text-sky-800 whitespace-nowrap">元スケッチ透過度:</span>
+                            <input type="range" min="0" max="100" value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} className="w-full accent-sky-600 cursor-pointer" />
+                            <span className="font-mono text-sky-700 w-10 text-right">{overlayOpacity}%</span>
+                        </div>
+                    )}
+
+                    <div className="flex-1 bg-slate-100 flex items-center justify-center overflow-auto relative p-4">
+                        {loading ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/85 backdrop-blur-sm z-10">
+                                <div className="flex flex-col items-center text-center p-6">
+                                    <div className="w-10 h-10 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-3"></div>
+                                    <p className="text-sm font-bold text-purple-900 animate-pulse">不動産販売図面グレードの2D CADベクター画像をレンダリング中...</p>
+                                    <p className="text-xs text-slate-500 mt-1">ISO/JIS準拠の建具シンボル・畳/フローリングハッチング・白床原則を適用しています</p>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {imageUrl ? (
+                            <div className="relative flex items-center justify-center transition-transform duration-150" style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}>
+                                <img src={imageUrl} alt="Generated CAD" className="max-w-full max-h-[380px] object-contain rounded-lg shadow-md border border-slate-300 bg-white" />
+
+                                {viewMode === 'split' && sketchImage && (
+                                    <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
+                                        <img src={sketchImage} alt="Original Sketch Split" className="w-full h-full object-contain bg-white" />
+                                        <div className="absolute top-0 bottom-0 w-0.5 bg-purple-600 shadow-lg" style={{ left: `${sliderPos}%` }} />
+                                    </div>
+                                )}
+
+                                {viewMode === 'overlay' && sketchImage && (
+                                    <img src={sketchImage} alt="Original Sketch Overlay" className="absolute inset-0 w-full h-full object-contain rounded-lg pointer-events-none" style={{ opacity: overlayOpacity / 100 }} />
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                                <div className="w-36 h-24 border-2 border-dashed border-slate-300 rounded-xl mb-3 bg-white/60 flex items-center justify-center">
+                                    <DraftingCompass className="w-8 h-8 text-slate-300" />
+                                </div>
+                                <p className="text-sm font-medium text-slate-500">ブループリント監査の承認待ち</p>
+                                <p className="text-xs text-slate-400 mt-1">Phase 1のYAML生成およびHyper-Max監査完了後、ここに高精細CAD図面が出力されます</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            const [appState, setAppState] = useState(AppState.IDLE);
+            const [sketchImage, setSketchImage] = useState(null);
+            const [blueprintYaml, setBlueprintYaml] = useState('');
+            const [verificationReport, setVerificationReport] = useState(null);
+            const [cadImage, setCadImage] = useState(null);
+            const [error, setError] = useState(null);
+            const [userFeedback, setUserFeedback] = useState('');
+            const [isSketchModalOpen, setIsSketchModalOpen] = useState(false);
+            const [autoAuditEnabled, setAutoAuditEnabled] = useState(true);
+
+            const quickFeedbackChips = [
+                "食器棚・冷蔵庫の周囲の不要な壁を削除して",
+                "トイレの重複を1つに修正して",
+                "ベッドを介護用シングルベッド(枕1つ)にして",
+                "浴室のドアを折り戸(folding_door)にして",
+                "和室に(Tatami)、洋室に(Flooring)を明記して"
+            ];
+
+            const handleImageSelected = useCallback(async (base64) => {
+                setSketchImage(base64);
+                setAppState(AppState.ANALYZING);
+                setError(null);
+                setBlueprintYaml('');
+                setVerificationReport(null);
+                setCadImage(null);
+                setUserFeedback('');
+
+                try {
+                    const yaml = await generateBlueprint(base64);
+                    setBlueprintYaml(yaml);
+
+                    if (autoAuditEnabled) {
+                        setAppState(AppState.VERIFYING_BLUEPRINT);
+                        try {
+                            const report = await verifyBlueprint(base64, yaml, '');
+                            setVerificationReport(report);
+                            setAppState(AppState.BLUEPRINT_VERIFIED);
+                        } catch (verifyErr) {
+                            setAppState(AppState.BLUEPRINT_READY);
+                        }
+                    } else {
+                        setAppState(AppState.BLUEPRINT_READY);
+                    }
+                } catch (e) {
+                    setError(`スケッチの構造解析に失敗しました: ${e.message || '再試行してください'}`);
+                    setAppState(AppState.ERROR);
+                }
+            }, [autoAuditEnabled]);
+
+            const handleVerifyBlueprint = useCallback(async () => {
+                if (!sketchImage || !blueprintYaml) return;
+                setAppState(AppState.VERIFYING_BLUEPRINT);
+                setError(null);
+
+                try {
+                    const report = await verifyBlueprint(sketchImage, blueprintYaml, userFeedback);
+                    setVerificationReport(report);
+                    setAppState(AppState.BLUEPRINT_VERIFIED);
+                } catch (e) {
+                    setError(`ブループリント監査中にエラーが発生しました: ${e.message || ''}`);
+                    setAppState(AppState.BLUEPRINT_READY);
+                }
+            }, [sketchImage, blueprintYaml, userFeedback]);
+
+            const handleRegenerateBlueprint = useCallback(async () => {
+                if (!sketchImage) return;
+                setAppState(AppState.ANALYZING);
+                setError(null);
+                const previousReport = verificationReport;
+                setVerificationReport(null);
+                setCadImage(null);
+
+                try {
+                    const yaml = await generateBlueprint(sketchImage, userFeedback, previousReport || undefined);
+                    setBlueprintYaml(yaml);
+
+                    if (autoAuditEnabled) {
+                        setAppState(AppState.VERIFYING_BLUEPRINT);
+                        const newReport = await verifyBlueprint(sketchImage, yaml, userFeedback);
+                        setVerificationReport(newReport);
+                        setAppState(AppState.BLUEPRINT_VERIFIED);
+                    } else {
+                        setAppState(AppState.BLUEPRINT_READY);
+                    }
+                } catch (e) {
+                    setError(`ブループリントの再生成に失敗しました: ${e.message || ''}`);
+                    setAppState(AppState.ERROR);
+                }
+            }, [sketchImage, userFeedback, verificationReport, autoAuditEnabled]);
+
+            const handleGenerateCad = useCallback(async () => {
+                if (!sketchImage || !blueprintYaml) return;
+                setAppState(AppState.GENERATING_CAD);
+                setError(null);
+
+                try {
+                    const imageUrl = await generateCadImage(sketchImage, blueprintYaml, userFeedback);
+                    setCadImage(imageUrl);
+                    setAppState(AppState.COMPLETE);
+                } catch (e) {
+                    setError(`CAD図面のレンダリングに失敗しました: ${e.message || 'もう一度お試しください'}`);
+                    setAppState(verificationReport ? AppState.BLUEPRINT_VERIFIED : AppState.BLUEPRINT_READY);
+                }
+            }, [sketchImage, blueprintYaml, userFeedback, verificationReport]);
+
+            const handleReset = useCallback(() => {
+                setAppState(AppState.IDLE);
+                setSketchImage(null);
+                setBlueprintYaml('');
+                setVerificationReport(null);
+                setCadImage(null);
+                setError(null);
+                setUserFeedback('');
+            }, []);
+
+            const getScoreColor = (score) => {
+                if (score >= 90) return 'text-emerald-400';
+                if (score >= 70) return 'text-amber-400';
+                return 'text-rose-400';
+            };
+
+            return (
+                <div className="flex flex-col min-h-screen lg:h-screen bg-slate-100 font-sans text-slate-900">
+                    <InteractiveSketchModal isOpen={isSketchModalOpen} onClose={() => setIsSketchModalOpen(false)} onApplySketch={handleImageSelected} />
+
+                    <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-gradient-to-br from-sky-600 to-indigo-700 rounded-xl shadow-md shadow-sky-600/20">
+                                <DraftingCompass className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">
+                                        HandSketchToCAD <span className="text-sky-600">Pro</span>
+                                    </h1>
+                                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-sky-50 text-sky-700 border border-sky-200 rounded-full">
+                                        v5.27.0 Protocol
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 font-mono">
+                                    Zero-Hallucination Architectural YAML & Vector CAD Engine (Canvas Keyless AI)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 sm:gap-5">
+                            <label className="hidden xl:flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                                <input type="checkbox" checked={autoAuditEnabled} onChange={(e) => setAutoAuditEnabled(e.target.checked)} className="accent-sky-600 rounded" />
+                                <span>Phase 1後に自動Hyper-Max監査を実行</span>
+                            </label>
+
+                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-semibold">
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${appState === AppState.IDLE || appState === AppState.ANALYZING ? 'bg-sky-100 text-sky-800 border border-sky-300' : 'text-slate-500'}`}>
+                                    <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">1</span> Sketch
+                                </span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${appState === AppState.BLUEPRINT_READY ? 'bg-sky-100 text-sky-800 border border-sky-300' : 'text-slate-500'}`}>
+                                    <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">2</span> Blueprint
+                                </span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${[AppState.VERIFYING_BLUEPRINT, AppState.BLUEPRINT_VERIFIED].includes(appState) ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'text-slate-500'}`}>
+                                    <ShieldCheck className="w-3.5 h-3.5" /> Verify
+                                </span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
+                                <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full ${appState === AppState.GENERATING_CAD || appState === AppState.COMPLETE ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'text-slate-500'}`}>
+                                    <span className="w-4 h-4 rounded-full bg-current/10 flex items-center justify-center text-[10px]">3</span> CAD
+                                </span>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 lg:overflow-hidden p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 max-w-[1720px] mx-auto w-full">
+                        <section className="lg:col-span-3 flex flex-col gap-4 lg:h-full min-h-[420px]">
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 overflow-hidden">
+                                <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                                    <span className="font-bold text-slate-800 text-xs sm:text-sm">Input Sketch</span>
+                                    {sketchImage && (
+                                        <div className="flex items-center gap-1.5">
+                                            <button onClick={() => setIsSketchModalOpen(true)} className="text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 rounded-md flex items-center gap-1">
+                                                <PenTool className="w-3 h-3" /> 作図パッド
+                                            </button>
+                                            <button onClick={handleReset} className="text-[11px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 px-2 py-1 rounded-md">
+                                                変更 / リセット
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex-1 p-2.5 relative bg-slate-100 flex items-center justify-center overflow-hidden">
+                                    {sketchImage ? (
+                                        <img src={sketchImage} alt="Original Sketch" className="w-full h-full max-h-[340px] object-contain rounded-lg shadow-sm bg-white border border-slate-200" />
+                                    ) : (
+                                        <ImageUpload onImageSelected={handleImageSelected} onOpenSketchPad={() => setIsSketchModalOpen(true)} />
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-sky-950 via-slate-900 to-slate-900 text-white rounded-xl p-4 border border-sky-800/50 shadow-md">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-bold text-sky-300 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                        <Activity className="w-3.5 h-3.5" /> Telemetry & Active Guards
+                                    </h4>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                        READY
+                                    </span>
+                                </div>
+
+                                <div className="space-y-2.5 text-xs">
+                                    <div className="flex items-center gap-2.5 bg-white/5 p-2 rounded-lg border border-white/10">
+                                        <div className={`p-1.5 rounded-md ${appState === AppState.ANALYZING ? 'bg-amber-400/20 text-amber-300 animate-pulse' : 'bg-sky-500/20 text-sky-300'}`}>
+                                            <Database className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[11px] font-bold text-slate-200 truncate">Knowledge Base v2026</p>
+                                            <p className="text-[10px] text-slate-400 truncate">介護ベッド・車椅子・こたつ・和室・廊下認識</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2.5 bg-white/5 p-2 rounded-lg border border-white/10">
+                                        <div className={`p-1.5 rounded-md ${appState === AppState.VERIFYING_BLUEPRINT ? 'bg-purple-400/20 text-purple-300 animate-pulse' : verificationReport ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-700 text-slate-400'}`}>
+                                            <ShieldCheck className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[11px] font-bold text-slate-200 truncate">Hostile Auditor Protocol</p>
+                                            <p className="text-[10px] text-slate-400 truncate">
+                                                {verificationReport ? `監査完了 — スコア: ${verificationReport.score}/100 (${verificationReport.status})` : appState === AppState.VERIFYING_BLUEPRINT ? 'ピクセル照合・重複＆壁囲い検査中...' : '待機中 (重複・幻覚・壁囲いを自動減点)'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="lg:col-span-5 lg:h-full min-h-[480px] flex flex-col gap-4">
+                            <div className={`${verificationReport || appState === AppState.VERIFYING_BLUEPRINT ? 'h-3/5' : 'h-full'} transition-all duration-300 min-h-[280px]`}>
+                                <BlueprintDisplay yaml={blueprintYaml} onChangeYaml={setBlueprintYaml} loading={appState === AppState.ANALYZING} />
+                            </div>
+
+                            {(appState === AppState.VERIFYING_BLUEPRINT || verificationReport) && (
+                                <div className="flex-1 bg-slate-900 rounded-xl shadow-lg border border-slate-700 overflow-hidden flex flex-col min-h-[190px]">
+                                    <div className="px-4 py-2 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+                                        <div className="flex items-center gap-2">
+                                            <ShieldCheck className="w-4 h-4 text-purple-400" />
+                                            <h3 className="font-mono font-bold text-slate-200 text-xs uppercase tracking-wider">Hyper-Max Audit Console</h3>
+                                        </div>
+                                        {verificationReport && (
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${verificationReport.status === 'PASS' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : verificationReport.status === 'WARNING' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}`}>
+                                                    {verificationReport.status}
+                                                </span>
+                                                <span className="text-xs text-slate-400 font-mono">SCORE:</span>
+                                                <span className={`text-base font-extrabold font-mono ${getScoreColor(verificationReport.score)}`}>{verificationReport.score}/100</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 p-3.5 overflow-auto font-mono text-xs text-emerald-400 leading-relaxed">
+                                        {verificationReport ? (
+                                            <div className="whitespace-pre-wrap">{verificationReport.raw_analysis}</div>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-slate-500 flex-col gap-2 py-6">
+                                                <Gauge className="w-7 h-7 animate-spin text-purple-400" />
+                                                <span className="text-purple-300 animate-pulse text-xs">元スケッチとYAMLのピクセル単位監査を実行中...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </section>
+
+                        <section className="lg:col-span-4 lg:h-full min-h-[480px] flex flex-col gap-4">
+                            <div className="flex-1 min-h-[280px]">
+                                <CadDisplay imageUrl={cadImage} sketchImage={sketchImage} loading={appState === AppState.GENERATING_CAD} />
+                            </div>
+
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3">
+                                {error && (
+                                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg flex items-start gap-2">
+                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                        <div className="flex-1">{error}</div>
+                                    </div>
+                                )}
+
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <div className="flex items-center gap-1.5 text-slate-700">
+                                            <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+                                            <span className="text-xs font-bold uppercase">Operator Instructions / 修正フィードバック</span>
+                                        </div>
+                                        {userFeedback && (
+                                            <button onClick={() => setUserFeedback('')} className="text-[10px] text-slate-400 hover:text-slate-600">クリア</button>
+                                        )}
+                                    </div>
+
+                                    <textarea className="w-full text-xs p-2 rounded-lg border border-slate-300 bg-white focus:ring-2 focus:ring-sky-500 outline-none resize-none h-14" placeholder="例: 『キッチンに流し台を追加』『食器棚の周りの壁を消去』『ドアを内開きに変更』..." value={userFeedback} onChange={(e) => setUserFeedback(e.target.value)} />
+
+                                    <div className="flex items-center gap-1 overflow-x-auto pt-2 pb-0.5 no-scrollbar">
+                                        {quickFeedbackChips.map((chip) => (
+                                            <button key={chip} onClick={() => setUserFeedback(prev => prev ? `${prev} / ${chip}` : chip)} className="shrink-0 text-[10px] px-2 py-1 rounded-full bg-white hover:bg-sky-50 text-slate-600 hover:text-sky-700 border border-slate-200 transition-colors">
+                                                + {chip}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    {appState === AppState.IDLE && (
+                                        <div className="text-center py-2 text-xs text-slate-400 font-medium">スケッチをアップロードするか、サンプルを選択するとパイプラインが開始します</div>
+                                    )}
+
+                                    {appState === AppState.ERROR && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={handleRegenerateBlueprint} disabled={!sketchImage} className="py-2.5 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50">
+                                                <RefreshCw className="w-4 h-4" /> 再試行する
+                                            </button>
+                                            <button onClick={handleReset} className="py-2.5 px-4 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 bg-slate-200 text-slate-700 hover:bg-slate-300">
+                                                <RotateCcw className="w-4 h-4" /> 最初からやり直す
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appState === AppState.BLUEPRINT_READY && (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button onClick={handleVerifyBlueprint} className="py-3 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-600/20">
+                                                    <ShieldCheck className="w-4 h-4" /> Hyper-Max 監査を実行
+                                                </button>
+                                                <button onClick={handleGenerateCad} className="py-3 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20">
+                                                    <ArrowRight className="w-4 h-4" /> 直接CAD図面を生成
+                                                </button>
+                                            </div>
+                                            <button onClick={handleRegenerateBlueprint} className="w-full py-2 px-4 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200">
+                                                <RefreshCw className="w-3.5 h-3.5" /> フィードバックを反映してYAMLを再生成
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appState === AppState.BLUEPRINT_VERIFIED && (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button onClick={handleRegenerateBlueprint} className="py-2.5 px-4 rounded-lg font-semibold flex flex-col items-center justify-center gap-0.5 bg-amber-500 text-white hover:bg-amber-600 shadow-md shadow-amber-500/20">
+                                                <div className="flex items-center gap-1 text-xs font-bold"><RefreshCw className="w-3.5 h-3.5" /> スコア改善・再生成</div>
+                                                <span className="text-[10px] opacity-90">監査指摘を契約強制して再解析</span>
+                                            </button>
+                                            <button onClick={handleGenerateCad} className="py-2.5 px-4 rounded-lg font-semibold flex flex-col items-center justify-center gap-0.5 bg-emerald-600 text-white hover:bg-emerald-700 shadow-md shadow-emerald-600/20">
+                                                <div className="flex items-center gap-1 text-xs font-bold"><ArrowRight className="w-3.5 h-3.5" /> CAD図面を生成</div>
+                                                <span className="text-[10px] opacity-90">Phase 2 高精細レンダリングへ</span>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {appState === AppState.COMPLETE && (
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <button onClick={handleGenerateCad} className="py-2.5 px-3 rounded-lg font-semibold flex flex-col items-center justify-center gap-0.5 bg-purple-600 text-white hover:bg-purple-700 shadow-sm">
+                                                <RefreshCw className="w-3.5 h-3.5" /> <span className="text-[11px] font-bold">CADのみ再描画</span>
+                                            </button>
+                                            <button onClick={handleRegenerateBlueprint} className="py-2.5 px-3 rounded-lg font-semibold flex flex-col items-center justify-center gap-0.5 bg-amber-500 text-white hover:bg-amber-600 shadow-sm">
+                                                <Edit3 className="w-3.5 h-3.5" /> <span className="text-[11px] font-bold">指示反映し再解析</span>
+                                            </button>
+                                            <button onClick={handleReset} className="py-2.5 px-3 rounded-lg font-semibold flex flex-col items-center justify-center gap-0.5 bg-slate-200 text-slate-700 hover:bg-slate-300">
+                                                <RotateCcw className="w-3.5 h-3.5" /> <span className="text-[11px] font-bold">新規プロジェクト</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
