@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+
+<html lang="ja">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>福祉ドキュメントメーカー Pro Canvas</title>
+
+<!-- Tailwind CSS -->
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- React & ReactDOM -->
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<!-- Babel for JSX -->
+
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Lucide Icons -->
+
+<script>window.react = window.React;</script>
+
+<script src="https://unpkg.com/lucide-react@0.344.0/dist/umd/lucide-react.min.js"></script>
+
+<!-- PDF Export -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+
+body { font-family: 'Segoe UI', 'Meiryo', 'メイリオ', sans-serif; }
+
+.stylish-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+
+.stylish-scrollbar::-webkit-scrollbar-track { background: transparent; }
+
+.stylish-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+
+@media print {
+
+body * { visibility: hidden; }
+
+.print-sheet, .print-sheet * { visibility: visible; }
+
+.print-sheet { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none !important; border: none !important; transform: scale(1) !important; margin: 0; padding: 0; }
+
+}
+
+</style>
+
+</head>
+
+<body class="bg-slate-100 text-slate-800">
+
+<div id="root"></div>
+
+<script type="text/babel">
+
+const { useState, useRef, useEffect, useMemo } = React;
+
+// Icon Fallback Wrapper
+
+const Lucide = window.lucideReact || {};
+
+const FallbackIcon = (props) => (
+
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+
+<circle cx="12" cy="12" r="10"/>
+
+</svg>
+
+);
+
+const IconProxy = new Proxy(Lucide, {
+
+get: (target, prop) => target[prop] || FallbackIcon
+
+});
+
+const {
+
+FileText, Table, Share2, Activity, Users, ClipboardList, CheckSquare,
+
+Stethoscope, Building2, ShieldAlert, FileSpreadsheet, MessageCircle,
+
+HeartPulse, Home, HelpCircle, Copy, Download, FileDown, Sparkles, Check,
+
+AlertCircle, Edit3, RefreshCw, Cpu, FileUp, Paperclip, Layers, Lightbulb,
+
+Search, Trash2, Printer, Clock, Eye, Code, ZoomIn, ZoomOut, RotateCcw,
+
+ChevronRight, CheckCircle2, Info, BookOpen, PenTool, LayoutTemplate, KeyRound, X
+
+} = IconProxy;
+
+// ==========================================
+
+// 1. 全14パターンの福祉ドキュメント形式 & カテゴリ・スタイル定義
+
+// ==========================================
+
+const FORMAT_CATEGORIES = [
+
+{ id: 'all', label: 'すべて' },
+
+{ id: 'daily', label: '日常記録・共有' },
+
+{ id: 'careplan', label: '計画・評価・会議' },
+
+{ id: 'medical', label: '医療・リハ・退院' },
+
+{ id: 'special', label: '家族・事故・申請' }
+
+];
+
+const FORMATS = [
+
+{ id: 'raw_table', category: 'daily', icon: Table, title: '1. そのまま表形式化', desc: '入力・参照資料の内容を一切削らず漏らさず全てプロ仕様の表へ整理' },
+
+{ id: 'multi_share', category: 'daily', icon: Share2, title: '2. 多職種への情報共有資料', desc: '指定事業所の職種に向けて連携に必要な要点をまとめたプロ仕様の表形式資料' },
+
+{ id: 'soap', category: 'daily', icon: Activity, title: '3. SOAP経過記録', desc: 'S(主訴)・O(客観)・A(評価)・P(計画)に整理した介護・看護記録' },
+
+{ id: 'conference', category: 'careplan', icon: Users, title: '4. サービス担当者会議 議事録', desc: '開催要項・出席者・照会要意向・決定事項・課題の構造化' },
+
+{ id: 'assessment', category: 'careplan', icon: ClipboardList, title: '5. アセスメントシート要約', desc: '本人意向・課題分析（23項目視点）・強み（ストレングス）の整理' },
+
+{ id: 'monitoring', category: 'careplan', icon: CheckSquare, title: '6. モニタリング評価報告書', desc: '目標達成度・生活変化・サービス継続変更の根拠記述' },
+
+{ id: 'medical_link', category: 'medical', icon: Stethoscope, title: '7. 主治医意見書・医療連携シート', desc: '症状・ADL変化・医療処置状況・医師への相談事項の整理' },
+
+{ id: 'discharge', category: 'medical', icon: Building2, title: '8. 退院・退所時調整サマリー', desc: '入院経過・在宅復帰時の看護介護上の注意点・必要サービス' },
+
+{ id: 'incident', category: 'special', icon: ShieldAlert, title: '9. 事故・ヒヤリハット報告書', desc: '発生状況(5W1H)・要因分析(本人/環境/手順)・再発防止策' },
+
+{ id: 'careplan', category: 'careplan', icon: FileSpreadsheet, title: '10. 施設・居宅ケアプラン要約', desc: '第1表(総合方針)・第2表(解決すべき課題・目標)の文章構築' },
+
+{ id: 'family_explain', category: 'special', icon: MessageCircle, title: '11. 家族説明・同意案内シート', desc: '専門用語をかみ砕き、支援の必要性と今後の流れを優しく解説' },
+
+{ id: 'rehab', category: 'medical', icon: HeartPulse, title: '12. 個別機能訓練・リハビリ共有書', desc: '動作課題・訓練内容・日常ケアで意識すべき声かけ・注意点' },
+
+{ id: 'housing', category: 'special', icon: Home, title: '13. 福祉用具・住宅改修 理由書', desc: '身体状況・現住居の障壁・導入による動作改善の具体的根拠' },
+
+{ id: 'difficult_case', category: 'special', icon: HelpCircle, title: '14. 困難事例ケースサマリー', desc: '認認介護・拒否・セルフネグレクト等の複雑課題整理と協議案' },
+
+];
+
+const TARGET_STYLES = [
+
+{ id: 'general', name: '🏢 汎用提出用（公的・標準的プロ仕様）', desc: '公的機関や社内共有、各種記録保存に幅広く使える標準的で整然としたプロ仕様文体' },
+
+{ id: 'multi_team', name: '🩺 多職種に向けた情報共有用（箇条書き・ポイント重視）', desc: '各専門職（医療・看護・介護・リハ）が迅速に要点を把握できるよう、項目別に整理' },
+
+{ id: 'official', name: '🏛️ 行政・監査提出用（公的・厳格）', desc: '専門用語を正確に使用し、客観的事実と根拠に基づいた公式文章' },
+
+{ id: 'medical_tone', name: '🩺 医療職連携用（簡潔・数値重視）', desc: '医師・看護師が短時間で把握できるよう、バイタル・ADL・時系列を整理' },
+
+{ id: 'family_tone', name: '🤝 家族・本人説明用（丁寧・かみくだき）', desc: '専門用語を極力排し、安心感を与える丁寧な敬体（です・ます）' },
+
+{ id: 'handwriting', name: '📄 A4記入欄付き（手書き・確認印枠あり）', desc: '確認印枠や指導者コメント・追加メモをペンで書き込める空白枠を配置' },
+
+];
+
+const QUICK_PHRASES = [
+
+{ label: 'バイタル強調', text: 'バイタル数値と前回からの変化がひと目で分かるように表の上部に配置してください。' },
+
+{ label: 'リスク・注意点', text: '転倒や誤嚥などのリスク要因と、現場スタッフが注意すべき観察ポイントを強調ボックスで明記してください。' },
+
+{ label: '家族への配慮', text: 'ご家族の介護負担への労いと、今後の具体的な相談窓口・緊急連絡体制を丁寧に盛り込んでください。' },
+
+{ label: '根拠(エビデンス)重視', text: '実地指導・監査に耐えうるよう、なぜその支援が必要なのか客観的根拠（ADL・IADLの状況）を明確に記述してください。' },
+
+];
+
+const SAMPLES = {
+
+raw_table: {
+
+request: "以下の手書き介護メモと観察記録の情報を、一切省略せずに全て整理した完全版表形式ドキュメントに変換してください。",
+
+source: `【訪問介護・看護・デイサービス記録の混在メモ】\n日時：10月13日 9:30〜15:00 利用者：佐藤フミ様（88歳、要介護2）\n・バイタル：血圧 128/74 mmHg、体温 36.4℃、脈拍 68回/分、Spo2 97%\n・午前中：デイサービス到着時、やや傾眠傾向あり。お茶200ml摂取後は表情穏やかになり集団レク（体操）に30分間参加。\n・昼食：粥食100%全量摂取、主菜（白身魚の煮付け）全量、副菜半分残す。自力摂取可能だが口腔内に残菜あり、看護師が食後の口腔ケア（うがいとスポンジブラシ）を実施。\n・服薬：食後の処方薬（血圧降下剤・胃薬）を看護師立ち会いのもと服薬完了。\n・入浴ケア：14:00 一般浴にて入浴。皮膚トラブル（背部・臀部に発赤なし、左下腿に乾燥あり、保湿ヒルドイド塗布）。\n・排泄：訪問時およびデイにて計3回（尿意訴えあり、パッド交換2回、汚染なし）。大便は本日なし（最終排便：昨日朝）。\n・特記事項・家族申し送り：夕方お迎えの長男妻へ、左足の乾燥保湿ケアの継続と、明朝の排便状況の確認を依頼。`
+
+},
+
+multi_share: {
+
+request: "対象事業所・職種：【訪問看護ステーション（看護師）・主治医・訪問リハビリPT】へ向けた要点情報共有資料を作成してください。",
+
+source: `【ケアマネジャーからの情報共有メモ】\n利用者：鈴木一郎様（81歳、要介護3、脳梗塞後遺症・右麻痺）\n現状と課題：\n・最近、夜間の頻尿（3〜4回）による睡眠不足が見られ、日中の訪問リハビリ時に疲労感が強く訓練が進まない。\n・主治医の先生へ：処方されている利尿剤の服用タイミング（現在夕食後）についてご相談したい。\n・訪問看護師様へ：夜間の水分摂取量とパット交換回数のログ確認、皮膚トラブル（臀部の圧迫感）の観察強化をお願いしたい。\n・訪問リハPT様へ：右下肢の痙性が強まっているため、無理な立位訓練を避け、座位での関節可動域訓練へ変更の要否をご検討いただきたい。`
+
+},
+
+soap: {
+
+request: "本日の訪問介護での様子をSOAP形式でまとめて作成してください。",
+
+source: `【現場メモ・観察データ】\n利用者：田中サダ子様（85歳、要介護3）\n訪問日時：10月13日 14:00〜15:00\n本人の発言：「今日は右の腰が痛くて起き上がるのが辛いのよ。デイサービス行きたくないわ。」\n観察事実：バイタル BP 132/78, KT 36.6℃, PR 72。右腰部に軽度の圧痛あり。歩行時に右足を庇う動作が見られる。昼食は8割摂取。水分200ml補給。\n実施ケア：腰部の温罨法（15分）を実施。痛みの軽減を図りつつ車椅子への移乗を全介助で行う。デイサービス連絡帳に腰痛の旨を記載し情報共有。\n今後の予定：明朝の訪問時にも腰痛の推移を確認。改善が見られない場合は主治医へ受診打診を行う。`
+
+},
+
+conference: {
+
+request: "新規要介護認定後のサービス担当者会議の議事録（第4表相当の要点整理）を作成してください。",
+
+source: `【会議メモ】\n開催日：10月15日 10:00〜10:45 場所：利用者自宅\n利用者：高橋健太様（79歳、要介護2、アルツハイマー型認知症・高血圧）\n出席者：本人、長女（同居）、ケアマネ（山田）、通所介護相談員（佐々木）、訪問介護サ責（井上）、福祉用具専門相談員（松本）\n検討項目：自宅内での転倒予防と、長女就労中の日中の見守り・服薬管理体制の構築。\n本人意向：「自分のことはなるべく自分でやりたいが、薬は飲んだか忘れてしまう。」\n長女意向：「仕事中、父が一人で火を使ったり転んだりしないか心配。昼の薬も飲み忘れが多い。」\n決定事項：\n1. 週3回（月・水・金）デイサービスを利用し、昼食・入浴・機能訓練・昼の服薬確認を行う。\n2. 火・木・土の昼に訪問介護（生活援助・身体介護）を導入し、配食弁当の温めと服薬介助を実施。\n3. 玄関上がり框とトイレに手すり（レンタル）を設置。\n次回予定：1ヶ月後にモニタリングおよび状況報告を実施。`
+
+},
+
+assessment: {
+
+request: "初回面談メモをもとに、課題分析（アセスメント）シートの要約を作成してください。",
+
+source: `【初回面談メモ】\n利用者：伊藤ヨシ子様（83歳、要介護1、変形性膝関節症、独居）\n本人意向：「住み慣れたこの家でずっと暮らしたい。近所の友人とお茶を飲むのが楽しみ。」\n家族意向（別居長男）：「週1回様子を見に来ているが、風呂場で滑らないか心配。買い物の重い荷物も大変そう。」\nADL・IADL状況：屋内は伝い歩きで自立。階段昇降や浴槽またぎに両膝痛あり不安定。調理は簡単なものは自力で行うが、米や飲料などの買い出しが困難。認知機能はしっかりしており服薬・金銭管理は自立。\n強み（ストレングス）：社交的で近隣住民との関係良好。家事への意欲が高い。`
+
+},
+
+monitoring: {
+
+request: "今月の定期モニタリング訪問の結果から、モニタリング評価報告書を作成してください。",
+
+source: `【10月度モニタリングメモ】\n利用者：渡辺正雄様（86歳、要介護2）\n短期目標1「週2回のデイサービスに通い、入浴と他者交流ができる」→ 評価：達成。欠席なく通所し、囲碁仲間ができて笑顔が増えた。清潔も保持されている。\n短期目標2「歩行器を使用して自宅内を転倒なく移動できる」→ 評価：一部達成（課題あり）。日中は安定しているが、夜間トイレ時に歩行器を使わず壁伝いに歩き、1回尻もちをついた（怪我なし）。\n今後の方針：通所介護は現行通り継続。夜間転倒リスクに対し、寝室からトイレまでの動線に畜光テープ付き手すりの追加導入を福祉用具と調整する。`
+
+},
+
+medical_link: {
+
+request: "主治医（〇〇クリニック・田中先生）へ提出する医療連携・状況報告および相談シートを作成してください。",
+
+source: `【医療連携メモ】\n利用者：山本和子様（90歳、要介護4、慢性心不全・糖尿病）\n直近2週間の変化：\n・血圧 145/88前後、脈拍 82、SpO2 95%。\n・10月8日頃より両下腿の浮腫が増強（指圧痕＋＋）。体重が1週間で+1.8kg増加（現在46.2kg）。\n・夜間、横になると息苦しさ（起坐呼吸気味）を訴えることが週2回あり。\n・食事摂取量は7〜8割、水分は1日1000ml程度。\n主治医への相談事項：心不全増悪の兆候がないかご診察いただきたいことと、現在の利尿剤や水分制限の指示値について再確認したい。`
+
+},
+
+discharge: {
+
+request: "急性期病院からの退院にあたり、在宅チーム向けの退院・退所時調整サマリーを作成してください。",
+
+source: `【退院前カンファレンス記録】\n利用者：中村茂様（77歳、要介護3、左大腿骨頸部骨折術後）\n入院経過：9月1日に自宅居間で転倒し左大腿骨頸部骨折。人工骨頭置換術を施行後、回復期リハ病棟にてリハビリ実施。10月20日退院予定。\n退院時ADL：T字杖＋見守りで屋内20m歩行可能。移乗は自立〜見守り。排泄はポータブルトイレ（夜間）と洋式トイレ（日中）併用。入浴はシャワーチェア使用で洗身一部介助、浴槽またぎは介助要。\n注意点：股関節の過度な屈曲・内旋禁止（脱臼肢位注意）。退院直後は環境変化による転倒リスク高いため動線整理必須。\n導入サービス：訪問看護（週1回・創部および全身観察）、訪問リハ（週2回）、通所リハ（週2回・入浴目的含む）、介護ベッド・手すり貸与。`
+
+},
+
+incident: {
+
+request: "施設内で発生した転倒インシデントについて、行政・家族報告にも使える事故・ヒヤリハット報告書を作成してください。",
+
+source: `【事故発生メモ】\n発生日時：2026年10月14日 18:45頃\n場所：特別養護老人ホーム2階 食堂から居室へ向かう廊下\n対象者：小林ツル様（89歳、要介護3、認知症あり）\n発生状況：夕食終了後、スタッフAが他利用者の口腔ケア誘導をしていた際、小林様が一人で車椅子から立ち上がり自室へ歩こうとしてバランスを崩し、右臀部から床に尻もちをついた。「パタン」という音でスタッフBが駆けつけ発見。\n処置・経過：意識清明、バイタルBP138/76、P78。右臀部に軽度発赤あるが腫脹・変形・可動域制限なし。看護師確認の上、居室ベッドにてクーリング実施し経過観察。19:10長男へ電話報告済み。\n要因：食後の眠気と帰宅願望が重なる時間帯であったこと、車椅子のフットレストが上がったままになっていたこと、見守りスタッフの死角が生じたこと。`
+
+},
+
+careplan: {
+
+request: "認定更新に伴う居宅サービス計画書（第1表・第2表）の原案要約を作成してください。",
+
+source: `【ケアプラン更新メモ】\n利用者：加藤ハナ様（84歳、要介護2、パーキンソン病（ヤール3度）、夫（86歳）と二人暮らし）\n本人・家族の意向：本人「体の動きが固くなる時間があるけれど、夫と一緒に自宅で生活を続けたい。」夫「妻の着替えや立ち上がりを手伝うと自分の腰も痛むので、プロの手を借りたい。」\n課題1：ウェアリングオフ現象による日中のすくみ足・転倒リスクの軽減と身体機能維持（通所リハ週2回、福祉用具手すり・歩行器）\n課題2：清潔保持（安全な入浴）と夫の介助負担軽減（通所リハでの入浴、訪問介護週3回の更衣・清拭・家事支援）\n課題3：確実な服薬管理と症状変動の把握（訪問看護週1回による服薬セット・体調管理）`
+
+},
+
+family_explain: {
+
+request: "これから初めて介護保険サービス（デイサービスと福祉用具レンタル）を利用するご家族・ご本人向けの、分かりやすく安心感のある説明・同意案内シートを作成してください。",
+
+source: `【案内用メモ】\n対象：吉田様ご家族（ご本人：吉田清様 82歳 要支援2）\n導入予定：\n1. デイサービス（週2回・火曜と金曜）：送迎あり、健康チェック、体操、入浴、昼食。目的は閉じこもり予防と足腰の筋力維持、安全な入浴。\n2. 手すりレンタル（玄関とトイレ）：工事不要の置き型手すり。月額数百円（1割負担）。\n伝えたいこと：最初は緊張するかもしれませんが、スタッフ全員で温かくサポートします。いつでも回数変更や相談が可能です。緊急連絡先：〇〇居宅介護支援事業所（担当：佐藤 03-XXXX-XXXX）。`
+
+},
+
+rehab: {
+
+request: "リハビリ職（PT/OT）から介護職・ご家族へ向けた「個別機能訓練・日常ケア共有書」を作成してください。",
+
+source: `【リハ評価・共有メモ】\n利用者：山口正様（80歳、要介護2、脳梗塞後遺症・左片麻痺）\n現在の動作課題：立ち上がり時に重心が後方へ残りやすく、健側（右手）で手すりを強く引っ張って立つ癖があるため、膝折れや転倒の危険がある。\n訓練内容：起立・着席反復訓練（前傾姿勢の獲得）、患側（左下肢）への荷重練習。\n日常ケアでのお願い（声かけ・介助ポイント）：\n・「お辞儀をするように頭を前に出してから立ちましょう」と声かけしてください。\n・手すりは引っ張るのではなく「上から押さえる位置」に手を誘導してください。\n・左足が後ろに引けているか確認してから立ち上がりを促してください。`
+
+},
+
+housing: {
+
+request: "市役所提出用の「住宅改修・福祉用具導入 必要性理由書」を作成してください。",
+
+source: `【現地調査・評価メモ】\n利用者：松本キヨ様（85歳、要介護2、両変形性股関節症）\n身体状況：股関節の可動域制限と疼痛により、片足立ち保持や深い屈曲が困難。\n現状の課題（改修箇所）：\n1. トイレ：現在和式便器に簡易洋式かぶせ便座を使用しているが、段差が20cmあり、立ち座り時に壁に手をついており転倒の危険が極めて高い。→ 洋式便器への交換（便座高42cm）とL字手すりの設置が必要。\n2. 玄関アプローチ：ポーチに18cmの段差が2段あり、通院・通所時の昇降でふらつきが著しい。→ 屋外用ステップ台と手すりの設置が必要。`
+
+},
+
+difficult_case: {
+
+request: "地域包括支援センターや行政とのケース検討会議に提出する「困難事例ケースサマリー」を作成してください。",
+
+source: `【ケース記録】\n世帯状況：井上夫婦。夫（87歳、要介護3、中等度認知症・易怒性あり）、妻（84歳、要介護1、軽度認知症・難聴）。同居親族なし、長男は遠方（県外）在住で疎遠。\n現在のリスク：\n・いわゆる「認認介護」状態。室内はゴミや賞味期限切れ食品が散乱し衛生状態悪化。\n・夫が「他人は家に入れたくない！」と訪問介護やデイサービスを強く拒否し、怒鳴ることがある。\n・妻は夫に萎縮しており、自身の通院や服薬も中断しがち。夏場のエアコン不使用による熱中症リスクや、火の不始末（鍋焦がし跡あり）も確認。\n協議したい点：医療（精神科・もの忘れ外来）への繋ぎ方、権利擁護・成年後見制度の活用、拒否がある中での段階的アプローチと緊急時対応ルール。`
+
+}
+
+};
+
+const buildSystemPrompt = (formatId, styleId) => {
+
+const styleObj = TARGET_STYLES.find(s => s.id === styleId) || TARGET_STYLES[0];
+
+let formatInstruction = "";
+
+switch(formatId) {
+
+case 'raw_table':
+
+formatInstruction = "【そのまま表形式化】入力されたテキストおよび参照資料に含まれるすべての情報（バイタル、発言、時系列行動、ケア内容、服薬、排泄、家族連絡等）を**一切省略せず、削らず、もれなく全て**プロ仕様の構造化されたHTML表形式（複数テーブル可）に整理・出力してください。";
+
+break;
+
+case 'multi_share':
+
+formatInstruction = "【多職種への情報共有資料】ユーザーが指定した事業所・職種（医師・看護師・PT/OT・ヘルパー・相談員等）に向けて、重要ポイント・共有事項・相談依頼内容をクリアに分類したプロ仕様の表形式ドキュメントを作成してください。";
+
+break;
+
+case 'soap':
+
+formatInstruction = "【SOAP経過記録】を作成してください。「S (Subjective: 主訴・本人の発言)」「O (Objective: 客観的観察・バイタル・実施ケア事実)」「A (Assessment: 専門的評価・分析)」「P (Plan: 今後の支援計画・申し送り)」の4項目を明確に区分して記述してください。";
+
+break;
+
+case 'conference':
+
+formatInstruction = "【サービス担当者会議 議事録（第4表相当）】を作成してください。「会議概要（日時・場所・出席者・開催理由）」「本人・家族の意向」「検討した項目と各専門職の意見」「検討結果・決定事項（支援内容・役割分担）」「残された課題と次回開催時期」を構造化してください。";
+
+break;
+
+case 'assessment':
+
+formatInstruction = "【アセスメントシート要約】を作成してください。「基本情報・本人家族の意向」「課題分析（身体・ADL・IADL・認知・社会参加・住環境）」「ストレングス（本人の強み・残存機能・意欲）」「総合的な課題と支援の方向性」をまとめてください。";
+
+break;
+
+case 'monitoring':
+
+formatInstruction = "【モニタリング評価報告書】を作成してください。「評価期間・基本情報」「各目標の達成状況（達成・一部達成・未達成）と具体評価」「サービスの実施状況・本人家族の満足度」「心身状態・生活環境の変化」「今後のケアプラン継続・変更の根拠」を構成してください。";
+
+break;
+
+case 'medical_link':
+
+formatInstruction = "【主治医意見書・医療連携シート】を作成してください。「報告目的・基本情報」「現在の生活状況とADL」「バイタル・症状・身体変化の経過」「介護・看護上の懸念点」「主治医への確認・ご指示いただきたい事項」を整理してください。";
+
+break;
+
+case 'discharge':
+
+formatInstruction = "【退院・退所時調整サマリー】を作成してください。「基本情報・入院入所経過」「退院時の心身状態・ADL・禁忌事項」「在宅生活における留意事項・医療処置・リスク管理」「導入・調整済みサービス一覧と役割分担」を構成してください。";
+
+break;
+
+case 'incident':
+
+formatInstruction = "【事故・ヒヤリハット報告書】を作成してください。「発生日時・場所・対象者・発見者」「発生状況の詳細(5W1H)・発見時の状態」「応急処置・受診結果・家族報告状況」「要因分析（本人要因・環境要因・業務手順要因）」「具体的な再発防止策」を含めてください。";
+
+break;
+
+case 'careplan':
+
+formatInstruction = "【施設・居宅ケアプラン要約】を作成してください。「第1表相当：利用者・家族の意向、総合的な援助の方針」「第2表相当：生活全般の解決すべき課題（ニーズ）、長期目標、短期目標、サービス内容・種別・頻度」を表形式で構築してください。";
+
+break;
+
+case 'family_explain':
+
+formatInstruction = "【家族説明・同意案内シート】を作成してください。「ご挨拶と支援の目的」「導入するサービスの内容と期待される効果」「費用目安・ご利用の流れ」「ご家族にお願いしたいご協力」「よくあるご質問・緊急連絡先」を温かく丁寧な文章で記載してください。";
+
+break;
+
+case 'rehab':
+
+formatInstruction = "【個別機能訓練・リハビリ共有書】を作成してください。「現在の動作課題とリスク」「リハビリ目標と訓練プログラム内容」「日常ケアで介護職・家族が意識すべき具体的な声かけ・誘導・環境設定のポイント」を整理してください。";
+
+break;
+
+case 'housing':
+
+formatInstruction = "【福祉用具・住宅改修 必要性理由書】を作成してください。「利用者の身体状況・動作上の課題」「現住居の環境課題・危険箇所」「導入・改修の具体的内容」「導入により期待される自立支援・安全性向上の医学的・介護的根拠」を明記してください。";
+
+break;
+
+case 'difficult_case':
+
+formatInstruction = "【困難事例ケースサマリー】を作成してください。「ケース概要・世帯構成・緊急度」「複合的リスクと課題の構造化（本人・介護者・住環境・経済・医療）」「これまでの関わりと限界」「多職種・行政協議のアジェンダと役割分担案」をまとめてください。";
+
+break;
+
+default:
+
+formatInstruction = "プロ品質の福祉ドキュメントを作成してください。";
+
+}
+
+let handWritingRule = "";
+
+if (styleId === 'handwriting') {
+
+handWritingRule = "ドキュメント上部または末尾に、確認印枠（ [施設長/管理者] [主任/リーダー] [担当者] ）の3列ミニテーブルと、ペンで追記できる空白欄（「【確認者コメント・追記欄】」として高さ80px程度の空白枠）を必ず配置してください。";
+
+}
+
+return `あなたは日本最高峰の社会福祉士・主任介護支援専門員であり、福祉ドキュメント作成の専門家です。
+
+指定されたフォーマット、文体ターゲット、および提供された【参照資料・記録メモ】を最大限に活用・網羅して、公的提出や多職種共有にそのまま使える最高品質のHTMLドキュメントを作成してください。
+
+【文体・提出先ターゲット指示】
+
+${styleObj.name} : ${styleObj.desc}
+
+${handWritingRule}
+
+【フォーマット指定】
+
+${formatInstruction}
+
+【参照資料の取り扱い規則】
+
+ユーザーから【参照資料・記録メモ】が提供されている場合は、その中の客観事実、バイタル数値、発言内容、時系列を忠実に読み取り、捏造することなくドキュメントの各構成要素へ正確にマッピングしてください。
+
+【絶対遵守のルール - 文章構成・表現】
+
+1. 事実（Objective）と解釈・評価（Assessment）を明確に区別して記述してください。
+
+2. 根拠に基づく記述（〜のため、〜の動作が見られる等）を徹底してください。
+
+3. 1文は短くハッキリと言い切ってください。
+
+【絶対遵守のルール - Microsoft Word完全互換インラインデザイン】
+
+1. **出力は純粋なHTMLタグのみ**としてください。Markdownのコードブロック (\`\`\`html や \`\`\` など) は絶対に出力しないでください。
+
+2. **CSSクラスは使用せず、すべて inline style (style="...") で記述**してください。
+
+3. **横並びカードや並列表記は、flex/grid/floatを使わず、必ず <table> タグで構築**してください。
+
+4. **特記事項やポイントなどの枠囲みボックスは、必ず1行1列の <table> (<table><tbody><tr><td>...</td></tr></tbody></table>) で構築**してください。
+
+5. カラーパレットは福祉・医療にふさわしい信頼感のある「ディープブルー基調（主色: \`#1e40af\` / 強調: \`#0284c7\` / 薄背景: \`#f0f9ff\`）」を使用してください。
+
+【デザインガイドライン (style属性例)】
+
+- 全体 wrapper: style="font-family: 'Segoe UI', 'Meiryo', 'メイリオ', sans-serif; color: #1e293b; line-height: 1.75; font-size: 10.5pt;"
+
+- 大見出し H1: style="font-size: 17pt; font-weight: bold; color: #1e40af; border-bottom: 3px solid #0284c7; padding-bottom: 8px; margin-top: 8px; margin-bottom: 16px; text-align: center;"
+
+- 中見出し H2: style="font-size: 12.5pt; font-weight: bold; color: #1e293b; border-left: 5px solid #0284c7; background-color: #f0f9ff; padding: 6px 12px; margin-top: 18px; margin-bottom: 10px;"
+
+- 表 Table: style="width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #cbd5e1;"
+
+- 表TH: style="background-color: #1e40af; color: #ffffff; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt;"
+
+- サブTH (左列見出し等): style="background-color: #f1f5f9; color: #1e293b; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 22%;"
+
+- 表TD: style="padding: 8px 10px; border: 1px solid #cbd5e1; vertical-align: top; font-size: 10pt;"
+
+- 強調ポイント枠: <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;"><tbody><tr><td style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-left: 6px solid #0284c7; padding: 12px 14px;">...</td></tr></tbody></table>`;
+
+};
+
+const buildLocalFallbackHtml = (formatId, styleId, inputText, sourceText) => {
+
+const fmt = FORMATS.find(f => f.id === formatId) || FORMATS[0];
+
+const styleObj = TARGET_STYLES.find(s => s.id === styleId) || TARGET_STYLES[0];
+
+const dateStr = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+
+const cleanTitle = fmt.title.replace(/^[0-9\.\s]+/, '');
+
+const rawLines = (sourceText || inputText || '').split('\n').map(l => l.trim()).filter(Boolean);
+
+let userName = '対象利用者 様';
+
+let recordDate = dateStr;
+
+let vitalInfo = '';
+
+rawLines.forEach(line => {
+
+const userMatch = line.match(/利用者[：:]\s*([^\s]+)/);
+
+if (userMatch) userName = userMatch[1];
+
+const dateMatch = line.match(/(日時|開催日|発生日時|訪問日時)[：:]\s*([^利用者]+)/);
+
+if (dateMatch) recordDate = dateMatch[2].trim();
+
+if (line.includes('バイタル') || line.includes('血圧') || line.includes('BP')) {
+
+vitalInfo = line.replace(/^[・\-\*]\s*/, '');
+
+}
+
+});
+
+const structuredRows = rawLines.map((line, idx) => {
+
+const cleaned = line.replace(/^[・\-\*]\s*/, '');
+
+const sepIdx = cleaned.search(/[：:]/);
+
+if (sepIdx > 0 && sepIdx < 20) {
+
+return {
+
+key: cleaned.slice(0, sepIdx).trim(),
+
+val: cleaned.slice(sepIdx + 1).trim()
+
+};
+
+}
+
+return {
+
+key: `記録項目 ${idx + 1}`,
+
+val: cleaned
+
+};
+
+});
+
+const rowsHtml = structuredRows.map((row, idx) => {
+
+const bg = idx % 2 === 1 ? '#f8fafc' : '#ffffff';
+
+return `<tr>
+
+<th style="background-color: #f1f5f9; color: #1e293b; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 25%; vertical-align: top;">${row.key}</th>
+
+<td style="background-color: ${bg}; padding: 8px 10px; border: 1px solid #cbd5e1; vertical-align: top; font-size: 10pt;">${row.val}</td>
+
+</tr>`;
+
+}).join('');
+
+const stampBoxHtml = styleId === 'handwriting' ? `
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 20px; margin-bottom: 12px;">
+
+<tbody>
+
+<tr>
+
+<td style="width: 55%; border: none; vertical-align: bottom; font-size: 9.5pt; color: #475569;">
+
+※本書類は確認後、所定の確認印を押印の上、原本を保管してください。
+
+</td>
+
+<td style="width: 45%; border: none; padding: 0;">
+
+<table style="width: 100%; border-collapse: collapse; border: 1px solid #94a3b8;">
+
+<thead>
+
+<tr>
+
+<th style="background-color: #f1f5f9; border: 1px solid #94a3b8; padding: 4px; text-align: center; font-size: 9pt; width: 33%;">管理者/施設長</th>
+
+<th style="background-color: #f1f5f9; border: 1px solid #94a3b8; padding: 4px; text-align: center; font-size: 9pt; width: 33%;">主任/リーダー</th>
+
+<th style="background-color: #f1f5f9; border: 1px solid #94a3b8; padding: 4px; text-align: center; font-size: 9pt; width: 33%;">作成担当者</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td style="height: 55px; border: 1px solid #94a3b8; text-align: center; vertical-align: middle; color: #cbd5e1; font-size: 9pt;">印</td>
+
+<td style="height: 55px; border: 1px solid #94a3b8; text-align: center; vertical-align: middle; color: #cbd5e1; font-size: 9pt;">印</td>
+
+<td style="height: 55px; border: 1px solid #94a3b8; text-align: center; vertical-align: middle; color: #cbd5e1; font-size: 9pt;">印</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<table style="width: 100%; border-collapse: collapse; margin-top: 12px; border: 1px solid #94a3b8;">
+
+<tbody>
+
+<tr>
+
+<th style="background-color: #f1f5f9; color: #1e293b; padding: 6px 10px; text-align: left; font-size: 9.5pt; border-bottom: 1px solid #94a3b8;">【手書き追記・指導者コメント欄】</th>
+
+</tr>
+
+<tr>
+
+<td style="height: 80px; padding: 10px; vertical-align: top; color: #94a3b8; font-size: 9pt;">（ここにペンで追記・確認事項を記入してください）</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+` : '';
+
+return `<div style="font-family: 'Segoe UI', 'Meiryo', 'メイリオ', sans-serif; color: #1e293b; line-height: 1.75; font-size: 10.5pt;">
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+
+<tbody>
+
+<tr>
+
+<td style="font-size: 9pt; color: #64748b; text-align: left;">様式区分：${fmt.title}（${styleObj.name.replace(/^[^\s]+\s/, '')}）</td>
+
+<td style="font-size: 9pt; color: #64748b; text-align: right;">作成日：${dateStr}</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h1 style="font-size: 17pt; font-weight: bold; color: #1e40af; border-bottom: 3px solid #0284c7; padding-bottom: 8px; margin-top: 4px; margin-bottom: 16px; text-align: center;">
+
+${cleanTitle}
+
+</h1>
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #cbd5e1;">
+
+<tbody>
+
+<tr>
+
+<th style="background-color: #1e40af; color: #ffffff; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 18%;">対象利用者</th>
+
+<td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 10.5pt; width: 32%;">${userName}</td>
+
+<th style="background-color: #1e40af; color: #ffffff; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 18%;">対象日時・期間</th>
+
+<td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-size: 10pt; width: 32%;">${recordDate}</td>
+
+</tr>
+
+${vitalInfo ? `<tr>
+
+<th style="background-color: #f1f5f9; color: #1e293b; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt;">バイタル・全身状態</th>
+
+<td colspan="3" style="padding: 8px 10px; border: 1px solid #cbd5e1; font-size: 10pt; background-color: #f0f9ff; font-weight: bold; color: #0369a1;">${vitalInfo}</td>
+
+</tr>` : ''}
+
+</tbody>
+
+</table>
+
+${inputText.trim() ? `
+
+<h2 style="font-size: 12pt; font-weight: bold; color: #1e293b; border-left: 5px solid #0284c7; background-color: #f0f9ff; padding: 6px 12px; margin-top: 16px; margin-bottom: 10px;">
+
+1. 作成目的・共有事項の要点
+
+</h2>
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+
+<tbody>
+
+<tr>
+
+<td style="background-color: #f0f9ff; border: 1px solid #bae6fd; border-left: 6px solid #0284c7; padding: 12px 14px; font-size: 10pt;">
+
+${inputText.replace(/\n/g, '<br/>')}
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>` : ''}
+
+<h2 style="font-size: 12pt; font-weight: bold; color: #1e293b; border-left: 5px solid #0284c7; background-color: #f0f9ff; padding: 6px 12px; margin-top: 16px; margin-bottom: 10px;">
+
+${inputText.trim() ? '2. 記録詳細・構造化データ一覧' : '1. 記録詳細・構造化データ一覧'}
+
+</h2>
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid #cbd5e1;">
+
+<thead>
+
+<tr>
+
+<th style="background-color: #1e40af; color: #ffffff; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 25%;">分類・項目</th>
+
+<th style="background-color: #1e40af; color: #ffffff; padding: 8px 10px; text-align: left; font-weight: bold; border: 1px solid #cbd5e1; font-size: 10pt; width: 75%;">客観的事実・経過・対応内容</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+${rowsHtml}
+
+</tbody>
+
+</table>
+
+<h2 style="font-size: 12pt; font-weight: bold; color: #1e293b; border-left: 5px solid #0284c7; background-color: #f0f9ff; padding: 6px 12px; margin-top: 16px; margin-bottom: 10px;">
+
+${inputText.trim() ? '3. 今後の対応方針・申し送り事項' : '2. 今後の対応方針・申し送り事項'}
+
+</h2>
+
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+
+<tbody>
+
+<tr>
+
+<td style="background-color: #ffffff; border: 1px solid #cbd5e1; padding: 12px 14px; font-size: 10pt;">
+
+・上記の観察事実および実施ケアに基づき、関係職種間で情報を共有し継続的なモニタリングを実施する。<br/>
+
+・状態変化や異常が見られた際は、速やかに管理者および主治医・関係事業所へ連絡・連携を図る。
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+${stampBoxHtml}
+
+</div>`;
+
+};
+
+function App() {
+
+const [inputText, setInputText] = useState('');
+
+const [sourceText, setSourceText] = useState('');
+
+const [selectedFormat, setSelectedFormat] = useState('raw_table');
+
+const [selectedCategory, setSelectedCategory] = useState('all');
+
+const [formatSearch, setFormatSearch] = useState('');
+
+const [selectedStyle, setSelectedStyle] = useState('general');
+
+const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash-preview-09-2025');
+
+const [outputHtml, setOutputHtml] = useState('');
+
+const [isGenerating, setIsGenerating] = useState(false);
+
+const [statusMsg, setStatusMsg] = useState('');
+
+const [errorMsg, setErrorMsg] = useState('');
+
+const [toastMsg, setToastMsg] = useState('');
+
+const [copySuccess, setCopySuccess] = useState(false);
+
+const [isEditing, setIsEditing] = useState(false);
+
+const [viewMode, setViewMode] = useState('preview');
+
+const [zoomLevel, setZoomLevel] = useState(100);
+
+const [history, setHistory] = useState([]);
+
+const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+const outputRef = useRef(null);
+
+const fileInputRef = useRef(null);
+
+const showToast = (msg) => {
+
+setToastMsg(msg);
+
+setTimeout(() => { setToastMsg((prev) => (prev === msg ? '' : prev)); }, 3200);
+
+};
+
+useEffect(() => {
+
+try {
+
+const saved = localStorage.getItem('welfare_doc_history_v2');
+
+if (saved) setHistory(JSON.parse(saved));
+
+} catch (e) {}
+
+}, []);
+
+const saveToHistory = (html, fmtId, styleId, req, src) => {
+
+const fmt = FORMATS.find(f => f.id === fmtId);
+
+const newItem = {
+
+id: Date.now().toString(),
+
+timestamp: new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }),
+
+formatId: fmtId,
+
+formatTitle: fmt ? fmt.title : fmtId,
+
+styleId,
+
+inputText: req,
+
+sourceText: src,
+
+html
+
+};
+
+setHistory(prev => {
+
+const updated = [newItem, ...prev].slice(0, 10);
+
+try { localStorage.setItem('welfare_doc_history_v2', JSON.stringify(updated)); } catch (e) {}
+
+return updated;
+
+});
+
+};
+
+const filteredFormats = FORMATS.filter(fmt => {
+
+const matchCategory = selectedCategory === 'all' || fmt.category === selectedCategory;
+
+const matchSearch = !formatSearch.trim() ||
+
+fmt.title.toLowerCase().includes(formatSearch.toLowerCase()) ||
+
+fmt.desc.toLowerCase().includes(formatSearch.toLowerCase());
+
+return matchCategory && matchSearch;
+
+});
+
+const currentFormatObj = FORMATS.find(f => f.id === selectedFormat) || FORMATS[0];
+
+const currentStyleObj = TARGET_STYLES.find(s => s.id === selectedStyle) || TARGET_STYLES[0];
+
+const handleInsertSample = () => {
+
+const sample = SAMPLES[selectedFormat] || SAMPLES.raw_table;
+
+setInputText(sample.request);
+
+setSourceText(sample.source);
+
+setErrorMsg('');
+
+showToast(`「${currentFormatObj.title}」のサンプルを挿入しました`);
+
+};
+
+const handleAddQuickPhrase = (phraseText) => {
+
+setInputText(prev => {
+
+if (!prev.trim()) return phraseText;
+
+return `${prev.trim()}\n・${phraseText}`;
+
+});
+
+showToast('補足指示にフレーズを追加しました');
+
+};
+
+const handleClearInputs = () => {
+
+setInputText('');
+
+setSourceText('');
+
+setErrorMsg('');
+
+showToast('入力内容をクリアしました');
+
+};
+
+const handleFileUpload = (e) => {
+
+const file = e.target.files?.[0];
+
+if (!file) return;
+
+const reader = new FileReader();
+
+reader.onload = (event) => {
+
+const content = event.target?.result;
+
+if (typeof content === 'string') {
+
+setSourceText(content);
+
+showToast(`ファイル「${file.name}」を読み込みました`);
+
+}
+
+};
+
+reader.readAsText(file);
+
+e.target.value = '';
+
+};
+
+// APIリクエスト実行（Canvas環境のプロキシ依存・キーなし仕様）
+
+const executeApiCall = async (modelName, textInput, sourceData, formatId, styleId) => {
+
+const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+const systemPrompt = buildSystemPrompt(formatId, styleId);
+
+const userContentPrompt = `【作成要望・補足指示】:\n${textInput || '指定のフォーマットに従い、分かりやすく整理してください。'}\n\n` +
+
+(sourceData.trim() ? `【参照資料・記録メモ（※この内容を網羅・解析して記述してください）】:\n${sourceData}` : '【参照資料・記録メモ】: 特になし（要望メモから構成してください）');
+
+const payload = {
+
+contents: [{ role: "user", parts: [{ text: userContentPrompt }] }],
+
+systemInstruction: { parts: [{ text: systemPrompt }] },
+
+generationConfig: { temperature: 0.2 }
+
+};
+
+const response = await fetch(apiUrl, {
+
+method: 'POST',
+
+headers: { 'Content-Type': 'application/json' },
+
+body: JSON.stringify(payload)
+
+});
+
+if (!response.ok) {
+
+const errJson = await response.json().catch(() => ({}));
+
+throw new Error(errJson.error?.message || `APIエラー (HTTP ${response.status})`);
+
+}
+
+return await response.json();
+
+};
+
+const handleGenerate = async () => {
+
+if (!inputText.trim() && !sourceText.trim()) {
+
+setErrorMsg('「3. 作成要望・補足指示」または「4. 参照記録データ」のいずれかを入力してください（右上の「サンプル挿入」からすぐにお試しいただけます）。');
+
+return;
+
+}
+
+setIsEditing(false);
+
+setIsGenerating(true);
+
+setErrorMsg('');
+
+setCopySuccess(false);
+
+setStatusMsg(`モデル「${selectedModel === 'gemini-2.5-pro' ? 'Gemini 2.5 Pro' : 'Gemini 2.5 Flash'}」でプロフェッショナル書式を生成中...`);
+
+try {
+
+let result;
+
+let currentModel = selectedModel;
+
+try {
+
+result = await executeApiCall(currentModel, inputText, sourceText, selectedFormat, selectedStyle);
+
+} catch (firstErr) {
+
+if (currentModel === 'gemini-2.5-pro') {
+
+console.warn("Proモデル制限・エラーを検出。推奨安定モデル Flash に自動フォールバックします。", firstErr);
+
+setStatusMsg("⚠️ アクセス制限・遅延を検知。安定動作モデル「Gemini 2.5 Flash」へ自動切り替え中...");
+
+await new Promise(res => setTimeout(res, 1000));
+
+currentModel = 'gemini-2.5-flash-preview-09-2025';
+
+result = await executeApiCall(currentModel, inputText, sourceText, selectedFormat, selectedStyle);
+
+} else {
+
+throw firstErr;
+
+}
+
+}
+
+setStatusMsg('Word完全互換レイアウトへマッピング・HTMLレンダリング中...');
+
+let resultHtml = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+resultHtml = resultHtml.replace(/^```(html)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+if (!resultHtml) throw new Error('AIからの応答データが空でした。');
+
+setOutputHtml(resultHtml);
+
+saveToHistory(resultHtml, selectedFormat, selectedStyle, inputText, sourceText);
+
+setStatusMsg('');
+
+showToast('Geminiによるプロフェッショナルな福祉ドキュメントの生成が完了しました');
+
+} catch (err) {
+
+console.warn("API呼び出し失敗のため、内蔵構造化エンジンでドキュメントを生成します:", err);
+
+const fallbackHtml = buildLocalFallbackHtml(selectedFormat, selectedStyle, inputText, sourceText);
+
+setOutputHtml(fallbackHtml);
+
+saveToHistory(fallbackHtml, selectedFormat, selectedStyle, inputText, sourceText);
+
+setStatusMsg('');
+
+showToast('内蔵テンプレートエンジンでドキュメントを構造化しました');
+
+} finally {
+
+setIsGenerating(false);
+
+}
+
+};
+
+const handleToggleEdit = () => {
+
+if (isEditing && outputRef.current) {
+
+setOutputHtml(outputRef.current.innerHTML);
+
+showToast('直接編集の内容を反映しました');
+
+}
+
+setIsEditing(!isEditing);
+
+};
+
+const getCurrentOutputHtml = () => {
+
+if (outputRef.current && viewMode === 'preview') return outputRef.current.innerHTML;
+
+return outputHtml;
+
+};
+
+const handleCopyClipboard = () => {
+
+const currentHtml = getCurrentOutputHtml();
+
+if (!currentHtml) return;
+
+try {
+
+if (outputRef.current && viewMode === 'preview') {
+
+const range = document.createRange();
+
+range.selectNodeContents(outputRef.current);
+
+const sel = window.getSelection();
+
+sel.removeAllRanges();
+
+sel.addRange(range);
+
+document.execCommand('copy');
+
+sel.removeAllRanges();
+
+} else {
+
+const tempTextarea = document.createElement('textarea');
+
+tempTextarea.value = currentHtml;
+
+document.body.appendChild(tempTextarea);
+
+tempTextarea.select();
+
+document.execCommand('copy');
+
+document.body.removeChild(tempTextarea);
+
+}
+
+setCopySuccess(true);
+
+showToast(viewMode === 'preview' ? '書式付きでコピーしました（Word等へそのまま貼り付け可能）' : 'HTMLソースコードをコピーしました');
+
+setTimeout(() => setCopySuccess(false), 3000);
+
+} catch (err) {
+
+setErrorMsg('クリップボードへのコピーに失敗しました。');
+
+}
+
+};
+
+const handleExportWord = () => {
+
+const currentHtml = getCurrentOutputHtml();
+
+if (!currentHtml) return;
+
+const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+
+<head><meta charset='utf-8'><title>福祉ドキュメント</title><style>@page Section1 { size: 595.3pt 841.9pt; margin: 36.0pt 36.0pt 36.0pt 36.0pt; mso-header-margin: 35.4pt; mso-footer-margin: 35.4pt; mso-paper-source: 0; } div.Section1 { page: Section1; } body { font-family: 'メイリオ', 'Meiryo', sans-serif; color: #1e293b; } table { border-collapse: collapse; width: 100%; }</style></head><body><div class="Section1">`;
+
+const footer = "</div></body></html>";
+
+const html = header + currentHtml + footer;
+
+const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+
+const url = URL.createObjectURL(blob);
+
+const link = document.createElement('a'); link.href = url;
+
+const formatName = currentFormatObj.title.replace(/^[0-9\.\s]+/, '') || '福祉ドキュメント';
+
+link.download = `福祉ドキュメント_${formatName}_${new Date().toISOString().slice(0, 10)}.doc`;
+
+document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+
+showToast(`Wordファイル（.doc）をダウンロードしました`);
+
+};
+
+const handleExportPdf = async () => {
+
+const currentHtml = getCurrentOutputHtml();
+
+if (!currentHtml) return;
+
+setIsGenerating(true); setStatusMsg('A4縦レイアウトでPDFファイルを生成中...');
+
+try {
+
+const formatName = currentFormatObj.title.replace(/^[0-9\.\s]+/, '') || '福祉ドキュメント';
+
+const opt = {
+
+margin: [10, 10, 10, 10],
+
+filename: `福祉ドキュメント_${formatName}_${new Date().toISOString().slice(0, 10)}.pdf`,
+
+image: { type: 'jpeg', quality: 0.98 },
+
+html2canvas: { scale: 2, useCORS: true, letterRendering: true, scrollY: 0, windowY: 0 },
+
+jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+
+pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+
+};
+
+const htmlString = `<div style="padding: 8px; background: #ffffff; color: #1e293b;">${currentHtml}</div>`;
+
+await window.html2pdf().set(opt).from(htmlString).save();
+
+showToast('PDFファイルを出力しました');
+
+} catch (err) {
+
+setErrorMsg('PDF生成中にエラーが発生しました。Word保存をお試しください。');
+
+} finally {
+
+setIsGenerating(false); setStatusMsg('');
+
+}
+
+};
+
+const handlePrint = () => {
+
+const currentHtml = getCurrentOutputHtml();
+
+if (!currentHtml) return;
+
+window.print();
+
+};
+
+return (
+
+<div className="min-h-screen bg-slate-100 text-slate-800 p-3 md:p-5 font-sans">
+
+{toastMsg && (
+
+<div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg border border-slate-700 flex items-center gap-2 text-xs font-bold transition-all">
+
+<CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+
+<span>{toastMsg}</span>
+
+</div>
+
+)}
+
+<header className="max-w-7xl mx-auto mb-4 bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+
+<div className="flex items-center gap-3">
+
+<div className="p-2.5 bg-gradient-to-br from-blue-700 to-sky-600 rounded-xl text-white shadow-md"><FileText className="w-6 h-6" /></div>
+
+<div>
+
+<div className="flex items-center gap-2 flex-wrap">
+
+<h1 className="text-lg md:text-xl font-bold text-slate-900">福祉ドキュメントメーカー</h1>
+
+<span className="text-[11px] bg-blue-50 text-blue-800 font-bold px-2.5 py-0.5 rounded-full border border-blue-200">Pro Canvas v2.0</span>
+
+<span className="text-[11px] bg-emerald-50 text-emerald-800 font-semibold px-2 py-0.5 rounded-full border border-emerald-200 hidden sm:inline-block">全14様式・Word完全互換</span>
+
+</div>
+
+<p className="text-xs text-slate-500 mt-0.5">介護記録・面談メモ・音声文字起こしから、公的提出・多職種連携にそのまま使えるWord互換表形式ドキュメントを自動構築</p>
+
+</div>
+
+</div>
+
+<div className="flex items-center gap-2 flex-wrap">
+
+<button onClick={() => setShowHistoryModal(!showHistoryModal)} className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold transition-colors">
+
+<Clock className="w-4 h-4 text-blue-700" /><span>履歴 ({history.length})</span>
+
+</button>
+
+<div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-xl border border-slate-200 text-xs">
+
+<Cpu className="w-4 h-4 text-blue-700 shrink-0 ml-1" />
+
+<select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold text-slate-700 focus:outline-none focus:border-blue-600 ml-1">
+
+<option value="gemini-2.5-flash-preview-09-2025">Gemini 2.5 Flash (高速)</option>
+
+<option value="gemini-2.5-pro">Gemini 2.5 Pro (高精度)</option>
+
+</select>
+
+</div>
+
+</div>
+
+</header>
+
+{showHistoryModal && (
+
+<div className="max-w-7xl mx-auto mb-4 bg-white rounded-2xl p-4 shadow-md border border-blue-200">
+
+<div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+
+<h2 className="text-xs font-bold text-slate-700 flex items-center gap-1.5"><Clock className="w-4 h-4 text-blue-700" /> 直近の生成ドキュメント履歴（最大10件）</h2>
+
+<button onClick={() => setShowHistoryModal(false)} className="text-xs text-slate-500 hover:text-slate-800 font-bold px-2 py-0.5 rounded">閉じる ✕</button>
+
+</div>
+
+{history.length === 0 ? (
+
+<p className="text-xs text-slate-400 py-3 text-center">まだ生成履歴がありません。</p>
+
+) : (
+
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-48 overflow-y-auto pr-1">
+
+{history.map((item) => (
+
+<div key={item.id} onClick={() => { setSelectedFormat(item.formatId); setSelectedStyle(item.styleId); setInputText(item.inputText); setSourceText(item.sourceText); setOutputHtml(item.html); setShowHistoryModal(false); showToast(`履歴「${item.formatTitle}」を復元しました`); }} className="p-2.5 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/40 cursor-pointer transition-all flex flex-col justify-between gap-1">
+
+<div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-blue-900 truncate">{item.formatTitle}</span><span className="text-[10px] text-slate-400 shrink-0">{item.timestamp}</span></div>
+
+<p className="text-[11px] text-slate-500 truncate">{item.sourceText || item.inputText || '（内容なし）'}</p>
+
+</div>
+
+))}
+
+</div>
+
+)}
+
+</div>
+
+)}
+
+<main className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+<div className="lg:col-span-5 flex flex-col gap-4">
+
+<div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+
+<div className="flex items-center justify-between gap-2 mb-2.5">
+
+<label className="text-xs font-bold text-slate-700 flex items-center gap-1.5"><Layers className="w-4 h-4 text-blue-700" /> 1. ドキュメント形式を選択</label>
+
+<span className="text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-bold">選択中: {currentFormatObj.title.split(' ')[0]}</span>
+
+</div>
+
+<div className="flex items-center gap-1 overflow-x-auto pb-2 mb-2">
+
+{FORMAT_CATEGORIES.map(cat => (
+
+<button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${selectedCategory === cat.id ? 'bg-blue-700 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{cat.label}</button>
+
+))}
+
+</div>
+
+<div className="relative mb-2.5">
+
+<Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+
+<input type="text" value={formatSearch} onChange={(e) => setFormatSearch(e.target.value)} placeholder="様式名・キーワードで絞り込み (例: SOAP, 退院...)" className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-500" />
+
+</div>
+
+<div className="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto pr-1 stylish-scrollbar">
+
+{filteredFormats.map((fmt) => {
+
+const Icon = fmt.icon;
+
+const isSelected = selectedFormat === fmt.id;
+
+return (
+
+<button key={fmt.id} onClick={() => setSelectedFormat(fmt.id)} className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all ${isSelected ? 'border-blue-600 bg-blue-50/80 ring-1 ring-blue-600 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50 bg-white'}`}>
+
+<div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${isSelected ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon className="w-3.5 h-3.5" /></div>
+
+<div className="min-w-0 flex-1">
+
+<div className={`text-xs font-bold flex items-center justify-between ${isSelected ? 'text-blue-950' : 'text-slate-700'}`}>
+
+<span className="truncate">{fmt.title}</span>
+
+{SAMPLES[fmt.id] && <span className="text-[10px] font-medium text-blue-600 bg-blue-100/70 px-1.5 py-0.2 rounded ml-1 shrink-0">例あり</span>}
+
+</div>
+
+<div className="text-[11px] text-slate-500 leading-snug mt-0.5">{fmt.desc}</div>
+
+</div>
+
+</button>
+
+);
+
+})}
+
+</div>
+
+</div>
+
+<div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+
+<label className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5"><Lightbulb className="w-4 h-4 text-blue-700" /> 2. 文体・提出先ターゲット</label>
+
+<select value={selectedStyle} onChange={(e) => setSelectedStyle(e.target.value)} className="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors">
+
+{TARGET_STYLES.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
+
+</select>
+
+<p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1"><Info className="w-3.5 h-3.5 text-blue-600 shrink-0" /><span>{currentStyleObj.desc}</span></p>
+
+</div>
+
+<div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col flex-1 gap-3.5">
+
+<div>
+
+<div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+
+<label className="text-xs font-bold text-slate-700 flex items-center gap-1.5"><PenTool className="w-3.5 h-3.5 text-blue-700" /> 3. 作成要望・補足指示</label>
+
+<div className="flex items-center gap-1.5">
+
+{(inputText || sourceText) && <button onClick={handleClearInputs} className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 bg-slate-100 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1" title="入力をすべてクリア"><Trash2 className="w-3 h-3" /> クリア</button>}
+
+<button onClick={handleInsertSample} className="text-[11px] font-bold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 border border-blue-200 shadow-sm"><BookOpen className="w-3.5 h-3.5" /> 選択様式のサンプル挿入</button>
+
+</div>
+
+</div>
+
+<textarea value={inputText} onChange={(e) => setInputText(e.target.value)} placeholder="共有先の指定（主治医・訪問看護・リハ等）や、作成にあたって強調したいポイントなどを入力..." className="w-full h-20 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-y" />
+
+<div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+
+<span className="text-[10px] font-bold text-slate-400">ワンタップ指示追加:</span>
+
+{QUICK_PHRASES.map((qp, i) => <button key={i} type="button" onClick={() => handleAddQuickPhrase(qp.text)} className="text-[10px] font-semibold bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 px-2 py-0.5 rounded-md border border-slate-200 transition-colors">+ {qp.label}</button>)}
+
+</div>
+
+</div>
+
+<div>
+
+<div className="flex items-center justify-between mb-1.5">
+
+<label className="text-xs font-bold text-slate-700 flex items-center gap-1.5"><Paperclip className="w-3.5 h-3.5 text-blue-700" /> 4. 参照記録データ<span className="text-[10px] font-normal text-slate-400">({sourceText.length} 文字)</span></label>
+
+<button onClick={() => fileInputRef.current?.click()} className="text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 border border-slate-200"><FileUp className="w-3.5 h-3.5 text-blue-700" /> テキスト読込</button>
+
+<input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.md,.csv,.json" className="hidden" />
+
+</div>
+
+<textarea value={sourceText} onChange={(e) => setSourceText(e.target.value)} placeholder="現場でとった手書きメモ、日々の介護記録テキスト、音声文字起こしデータなどをそのまま貼り付け..." className="w-full h-36 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-y leading-relaxed" />
+
+</div>
+
+{errorMsg && (
+
+<div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-start gap-2 leading-relaxed">
+
+<AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><span>{errorMsg}</span>
+
+</div>
+
+)}
+
+<button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-3.5 px-4 rounded-xl font-bold text-sm text-white shadow-md flex items-center justify-center gap-2 transition-all mt-auto ${isGenerating ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-700 to-sky-600 hover:from-blue-800 hover:to-sky-700 hover:shadow-lg active:scale-[0.99]'}`}>
+
+{isGenerating ? <><RefreshCw className="w-4 h-4 animate-spin" /><span>ドキュメント構造化・生成中...</span></> : <><Sparkles className="w-4 h-4" /><span>「{currentFormatObj.title.replace(/^[0-9\.\s]+/, '')}」を生成する</span></>}
+
+</button>
+
+{statusMsg && <div className="text-center text-[11px] font-semibold text-blue-800 bg-blue-50 p-2 rounded-lg animate-pulse border border-blue-200">{statusMsg}</div>}
+
+</div>
+
+</div>
+
+<div className="lg:col-span-7 flex flex-col lg:h-[calc(100vh-115px)] min-h-[640px]">
+
+<div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+
+<div className="p-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/90">
+
+<div className="flex items-center gap-1.5 flex-wrap">
+
+<div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-300/60">
+
+<button onClick={() => setViewMode('preview')} className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'preview' ? 'bg-white text-blue-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}><Eye className="w-3.5 h-3.5" /> A4プレビュー</button>
+
+<button onClick={() => { if (isEditing && outputRef.current) { setOutputHtml(outputRef.current.innerHTML); setIsEditing(false); } setViewMode('html'); }} className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition-all ${viewMode === 'html' ? 'bg-white text-blue-800 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}><Code className="w-3.5 h-3.5" /> HTMLソース</button>
+
+</div>
+
+{outputHtml && viewMode === 'preview' && (
+
+<div className="hidden sm:flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-1.5 py-0.5 text-xs">
+
+<button onClick={() => setZoomLevel(z => Math.max(70, z - 10))} className="p-1 text-slate-500 hover:text-slate-800"><ZoomOut className="w-3.5 h-3.5" /></button>
+
+<span className="text-[11px] font-bold text-slate-600 min-w-[36px] text-center">{zoomLevel}%</span>
+
+<button onClick={() => setZoomLevel(z => Math.min(130, z + 10))} className="p-1 text-slate-500 hover:text-slate-800"><ZoomIn className="w-3.5 h-3.5" /></button>
+
+{zoomLevel !== 100 && <button onClick={() => setZoomLevel(100)} className="p-1 text-slate-400 hover:text-slate-700"><RotateCcw className="w-3 h-3" /></button>}
+
+</div>
+
+)}
+
+{outputHtml && viewMode === 'preview' && (
+
+<button onClick={handleToggleEdit} className={`text-xs px-2.5 py-1.5 rounded-lg font-bold border transition-all flex items-center gap-1.5 ${isEditing ? 'bg-amber-500 border-amber-600 text-white shadow-sm' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 shadow-sm'}`}><Edit3 className="w-3.5 h-3.5" /><span>{isEditing ? '編集を確定' : '文字を直接編集'}</span></button>
+
+)}
+
+</div>
+
+{outputHtml && (
+
+<div className="flex items-center gap-1.5 flex-wrap">
+
+<button onClick={handleCopyClipboard} className="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all">{copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-blue-700" />}<span>{copySuccess ? 'コピー済' : '書式コピー'}</span></button>
+
+<button onClick={handleExportWord} className="bg-blue-700 hover:bg-blue-800 border border-blue-800 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"><Download className="w-3.5 h-3.5" /><span>Word保存</span></button>
+
+<button onClick={handleExportPdf} className="bg-slate-800 hover:bg-slate-900 border border-slate-900 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"><FileDown className="w-3.5 h-3.5" /><span>PDF出力</span></button>
+
+<button onClick={handlePrint} className="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 p-1.5 rounded-lg text-xs font-bold shadow-sm transition-all hidden sm:flex items-center" title="印刷する"><Printer className="w-3.5 h-3.5" /></button>
+
+</div>
+
+)}
+
+</div>
+
+{isEditing && viewMode === 'preview' && (
+
+<div className="bg-amber-50 border-b border-amber-200 px-4 py-1.5 text-[11px] font-bold text-amber-900 flex items-center justify-between">
+
+<span>✏️ 直接編集モード中：用紙内のテキストや表の数値をクリックして直接書き換えられます。</span>
+
+<button onClick={handleToggleEdit} className="bg-amber-600 text-white px-2 py-0.5 rounded font-bold hover:bg-amber-700">編集完了して保存</button>
+
+</div>
+
+)}
+
+<div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-200/70 stylish-scrollbar">
+
+{outputHtml ? (
+
+viewMode === 'preview' ? (
+
+<div style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center', transition: 'transform 0.15s ease-out' }} className="max-w-[210mm] mx-auto bg-white min-h-[297mm] shadow-md border border-slate-300 rounded-sm print-sheet">
+
+<div ref={outputRef} contentEditable={isEditing} suppressContentEditableWarning={true} onBlur={() => { if (isEditing && outputRef.current) setOutputHtml(outputRef.current.innerHTML); }} className={`p-6 md:p-10 focus:outline-none transition-colors ${isEditing ? 'bg-amber-50/20 ring-2 ring-amber-400/60 min-h-[297mm]' : ''}`} dangerouslySetInnerHTML={{ __html: outputHtml }} />
+
+</div>
+
+) : (
+
+<div className="max-w-4xl mx-auto bg-slate-900 text-slate-100 rounded-xl p-4 shadow-inner border border-slate-700 h-full flex flex-col">
+
+<div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700 text-xs text-slate-400"><span>Word互換 インラインCSS付きHTMLソースコード（直接編集可）</span><span className="font-mono">{outputHtml.length} chars</span></div>
+
+<textarea value={outputHtml} onChange={(e) => setOutputHtml(e.target.value)} className="w-full flex-1 bg-transparent font-mono text-xs text-emerald-300 focus:outline-none resize-none leading-relaxed" />
+
+</div>
+
+)
+
+) : (
+
+<div className="max-w-[210mm] mx-auto bg-white min-h-[520px] h-full shadow-sm border border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-8">
+
+<div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 border border-blue-100"><LayoutTemplate className="w-8 h-8 text-blue-600 stroke-[1.75]" /></div>
+
+<h3 className="text-base font-bold text-slate-800 mb-1.5">A4 Word互換ドキュメント プレビュー</h3>
+
+<p className="text-xs text-slate-500 max-w-md leading-relaxed mb-6">左側のパネルで「1. ドキュメント形式」と「2. 文体ターゲット」を選び、記録メモを入力して生成ボタンを押してください。</p>
+
+<div className="w-full max-w-lg bg-slate-50 border border-slate-200 rounded-xl p-4 text-left">
+
+<div className="text-xs font-bold text-slate-700 mb-2.5 flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-blue-700" /> 1クリックで試せるクイックスタート</div>
+
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+{['raw_table', 'soap', 'conference', 'medical_link'].map(fid => {
+
+const fObj = FORMATS.find(f => f.id === fid);
+
+if (!fObj) return null;
+
+return (
+
+<button key={fid} onClick={() => { setSelectedFormat(fid); const smp = SAMPLES[fid]; setInputText(smp.request); setSourceText(smp.source); showToast(`「${fObj.title}」のサンプルをセットしました`); }} className="p-2.5 bg-white hover:bg-blue-50/60 rounded-lg border border-slate-200 hover:border-blue-400 text-left transition-all flex items-center justify-between group">
+
+<div className="min-w-0 pr-2"><div className="text-xs font-bold text-slate-800 group-hover:text-blue-800 truncate">{fObj.title}</div><div className="text-[10px] text-slate-400 truncate mt-0.5">サンプルデータを自動入力</div></div>
+
+<ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 shrink-0" />
+
+</button>
+
+);
+
+})}
+
+</div>
+
+</div>
+
+</div>
+
+)}
+
+</div>
+
+</div>
+
+</div>
+
+</main>
+
+</div>
+
+);
+
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+
+root.render(<App />);
+
+</script>
+
+</body>
+
+</html>
